@@ -152,8 +152,6 @@ void print_config()
          << "\n   MaxWorkConnections     : " << conf->MaxWorkConnections
 
          << "\n\n   NumProc                : " << conf->NumProc
-         << "\n   MaxThreads             : " << conf->MaxThreads
-         << "\n   MimThreads             : " << conf->MinThreads
          << "\n   MaxCgiProc             : " << conf->MaxCgiProc
 
          << "\n\n   MaxRequestsPerClient   : " << conf->MaxRequestsPerClient
@@ -354,7 +352,8 @@ int main_proc()
     pid_t pid = getpid();
     //------------------------------------------------------------------
     cout << "\n[" << get_time().c_str() << "] - server \"" << conf->ServerSoftware.c_str()
-         << "\" run, port: " << conf->ServerPort.c_str() << "\n";
+         << "\" run, port: " << conf->ServerPort.c_str()
+         << "\n   hardware_concurrency = " << thread::hardware_concurrency() << "\n";
     if (conf->Protocol == HTTPS)
     {
         SSL  *ssl = SSL_new(conf->ctx);
@@ -463,8 +462,7 @@ int main_proc()
 
     shutdown(sockServer, SHUT_RDWR);
     close(pfd[1]);
-/*
-    ERR_free_strings();*/
+
     SSL_CTX_free(conf->ctx);
     cleanup_openssl();
 
