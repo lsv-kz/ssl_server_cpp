@@ -26,7 +26,7 @@ void Connect::init()
 
     cgi = NULL;
     cgi_type = NO_CGI;
-    scriptName = NULL;
+    scriptName = "";
 
     hdrs = "";
     numPart = 0;

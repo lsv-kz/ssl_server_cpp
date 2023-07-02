@@ -58,7 +58,7 @@ void create_conf_file(const char *path)
 
     fprintf(f, "DocumentRoot  www/html\n");
     fprintf(f, "ScriptPath  www/cgi-bin\n");
-    fprintf(f, "LogPath  www/logs\n\n");
+    fprintf(f, "LogPath  www/logs\n");
     fprintf(f, "PidFilePath  www/pid\n\n");
 
     fprintf(f, "SendFile  y\n");
@@ -69,6 +69,7 @@ void create_conf_file(const char *path)
 
     fprintf(f, "NumProc  1\n");
     fprintf(f, "MaxNumProc  4\n");
+    fprintf(f, "NumThreads  2\n");
     fprintf(f, "MaxCgiProc  15\n\n");
 
     fprintf(f, "MaxRequestsPerClient  100\n");
@@ -332,6 +333,8 @@ int read_conf_file(FILE *fconf)
                 s2 >> c.NumProc;
             else if ((s1 == "MaxNumProc") && is_number(s2.c_str()))
                 s2 >> c.MaxNumProc;
+            else if ((s1 == "NumThreads") && is_number(s2.c_str()))
+                s2 >> c.NumThreads;
             else if ((s1 == "MaxCgiProc") && is_number(s2.c_str()))
                 s2 >> c.MaxCgiProc;
             else if ((s1 == "MaxRequestsPerClient") && is_number(s2.c_str()))
@@ -489,6 +492,12 @@ int read_conf_file(FILE *fconf)
     {
         print_err("<%s:%d> Error: SndBufSize=%d\n", __func__, __LINE__, conf->SndBufSize);
         exit(1);
+    }
+    //------------------------------------------------------------------
+    if ((c.NumThreads > 8) || (c.NumThreads < 1))
+    {
+        fprintf(stderr, "<%s:%d> Error: NumThreads=%d\n", __func__, __LINE__, c.NumThreads);
+        return -1;
     }
     //------------------------------------------------------------------
     //c.NumCpuCores = thread::hardware_concurrency();

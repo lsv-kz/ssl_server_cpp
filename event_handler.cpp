@@ -236,58 +236,55 @@ mtx_cgi.lock();
                 cgi_wait_list_start = NULL;
             --cgi_wait;
             //--------------------------
-            if (r->operation == DYN_PAGE)
+            r->cgi = new (nothrow) Cgi;
+            if (!r->cgi)
             {
-                r->cgi = new (nothrow) Cgi;
-                if (!r->cgi)
+                r->err = -RS500;
+                end_response(r);
+                continue;
+            }
+
+            if ((r->cgi_type == CGI) || (r->cgi_type == PHPCGI))
+            {
+                int ret = cgi_create_pipes(r);
+                if (ret < 0)
                 {
-                    r->err = -RS500;
+                    print_err(r, "<%s:%d> Error cgi_create_pipes()=%d\n", __func__, __LINE__, ret);
+                    r->err = ret;
+                    delete r->cgi;
+                    r->cgi = NULL;
+                    end_response(r);
+                    continue;
+                }
+            }
+            else if ((r->cgi_type == PHPFPM) || (r->cgi_type == FASTCGI))
+            {
+                int ret = fcgi_create_connect(r);
+                if (ret < 0)
+                {
+                    r->err = ret;
                     end_response(r);
                     continue;
                 }
 
-                if ((r->cgi_type == CGI) || (r->cgi_type == PHPCGI))
+                r->fcgi.status = FCGI_READ_DATA;
+                r->fcgi.len_buf = 0;
+            }
+            else if (r->cgi_type == SCGI)
+            {
+                int ret = scgi_create_connect(r);
+                if (ret < 0)
                 {
-                    int ret = cgi_create_pipes(r);
-                    if (ret < 0)
-                    {
-                        print_err(r, "<%s:%d> Error cgi_create_pipes()=%d\n", __func__, __LINE__, ret);
-                        r->err = ret;
-                        delete r->cgi;
-                        r->cgi = NULL;
-                        end_response(r);
-                        continue;
-                    }
-                }
-                else if ((r->cgi_type == PHPFPM) || (r->cgi_type == FASTCGI))
-                {
-                    int ret = fcgi_create_connect(r);
-                    if (ret < 0)
-                    {
-                        r->err = ret;
-                        end_response(r);
-                        continue;
-                    }
-    
-                    r->fcgi.status = FCGI_READ_DATA;
-                    r->fcgi.len_buf = 0;
-                }
-                else if (r->cgi_type == SCGI)
-                {
-                    int ret = scgi_create_connect(r);
-                    if (ret < 0)
-                    {
-                        r->err = ret;
-                        end_response(r);
-                        continue;
-                    }
-                }
-                else
-                {
-                    print_err(r, "<%s:%d> operation=%d, cgi_type=%s\n", __func__, __LINE__, r->operation, get_cgi_type(r->cgi_type));
+                    r->err = ret;
                     end_response(r);
                     continue;
                 }
+            }
+            else
+            {
+                print_err(r, "<%s:%d> operation=%d, cgi_type=%s\n", __func__, __LINE__, r->operation, get_cgi_type(r->cgi_type));
+                end_response(r);
+                continue;
             }
             //--------------------------
             if (work_list_end)
@@ -343,10 +340,10 @@ static int set_poll()
                 r->err = -1;
                 end_response(r);
             }
-            
+
             continue;
         }
-        
+
         if (r->operation == DYN_PAGE)
         {
             cgi_set_poll_list(r, &num_poll, t);
@@ -516,14 +513,9 @@ static int worker(int num_chld)
                     {
                         r->req_hd.iReferer = MAX_HEADERS - 1;
                         r->reqHdValue[r->req_hd.iReferer] = "Connection reset by peer";
-                        r->err = -1;
-                        end_response(r);
                     }
-                    else
-                    {
-                        r->err = -1;
-                        end_response(r);
-                    }
+                    r->err = -1;
+                    end_response(r);
                 }
             }
             /*else if (poll_fd[i].revents == 0)
@@ -611,6 +603,7 @@ mtx_cgi.unlock();
 //======================================================================
 void add_wait_list(Connect *r)
 {
+    r->io_status = WORK;
     r->sock_timer = 0;
     r->next = NULL;
 mtx_.lock();
@@ -628,7 +621,6 @@ mtx_.unlock();
 //======================================================================
 void push_send_file(Connect *r)
 {
-    r->io_status = WORK;
     lseek(r->fd, r->offset, SEEK_SET);
     r->resp_headers.p = r->resp_headers.s.c_str();
     r->resp_headers.len = r->resp_headers.s.size();
@@ -641,13 +633,13 @@ void push_send_file(Connect *r)
 //======================================================================
 void push_pollin_list(Connect *r)
 {
+    r->event = POLLIN;
     r->source_entity = NO_ENTITY;
     add_wait_list(r);
 }
 //======================================================================
 void push_send_multipart(Connect *r)
 {
-    r->io_status = WORK;
     r->resp_headers.p = r->resp_headers.s.c_str();
     r->resp_headers.len = r->resp_headers.s.size();
     
@@ -659,7 +651,6 @@ void push_send_multipart(Connect *r)
 //======================================================================
 void push_send_html(Connect *r)
 {
-    r->io_status = WORK;
     r->event = POLLOUT;
     r->source_entity = FROM_DATA_BUFFER;
     r->operation = SEND_RESP_HEADERS;
@@ -950,7 +941,7 @@ static void worker(Connect *r)
     }
     else if (r->operation == READ_REQUEST)
     {
-        int ret = hd_read(r);
+        int ret = read_request_headers(r);
         if (ret < 0)
         {
             if (ret == ERR_TRY_AGAIN)
@@ -965,7 +956,7 @@ static void worker(Connect *r)
         else if (ret > 0)
         {
             del_from_list(r);
-            response1(r);
+            push_resp_list(r);
         }
         else
             r->sock_timer = 0;

@@ -72,7 +72,6 @@ enum {
     M_PATCH, M_DELETE, M_TRACE, M_CONNECT
 };
 enum { HTTP09 = 1, HTTP10, HTTP11, HTTP2 };
-enum { EXIT_THR = 1 };
 
 enum PROTOCOL {HTTP = 1, HTTPS};
 enum MODE_SEND { NO_CHUNK, CHUNK, CHUNK_END };
@@ -163,6 +162,7 @@ struct Config
 
     unsigned int NumProc;
     unsigned int MaxNumProc;
+    unsigned int NumThreads;
     unsigned int MaxCgiProc;
 
     unsigned int MaxRanges;
@@ -350,22 +350,50 @@ public:
     void init();
 };
 //----------------------------------------------------------------------
+class RequestManager
+{
+private:
+    Connect *list_start;
+    Connect *list_end;
+
+    std::mutex mtx_list;
+    std::condition_variable cond_list;
+
+    unsigned int NumProc, all_req, stop_manager;
+
+    RequestManager() {}
+public:
+    RequestManager(const RequestManager&) = delete;
+    RequestManager(unsigned int);
+    ~RequestManager();
+    //-------------------------------
+    unsigned int get_num_proc()
+    {
+        return NumProc;
+    }
+    void push_resp_list(Connect *req);
+    Connect *pop_resp_list();
+    void close_manager();
+    unsigned int get_all_request()
+    {
+        return all_req;
+    }
+};
+//----------------------------------------------------------------------
 extern char **environ;
 //----------------------------------------------------------------------
-void response1(Connect *req);
+void response1(int n_proc);
 int response2(Connect *req);
 int options(Connect *req);
 int index_dir(Connect *req, std::string& path);
 //----------------------------------------------------------------------
 int create_fcgi_socket(const char *host);
+int read_from_client(Connect *req, char *buf, int len);
+int write_to_client(Connect *req, const char *buf, int len);
+int read_request_headers(Connect* req);
 //----------------------------------------------------------------------
 int encode(const char *s_in, char *s_out, int len_out);
 int decode(const char *s_in, int len_in, char *s_out, int len);
-//----------------------------------------------------------------------
-int read_from_pipe(int fd, char *buf, int len, int timeout);
-int read_from_client(Connect *req, char *buf, int len);
-int write_to_client(Connect *req, const char *buf, int len);
-int hd_read(Connect* req);
 //----------------------------------------------------------------------
 int send_message(Connect *req, const char *msg);
 int create_response_headers(Connect *req);
@@ -383,15 +411,6 @@ const char *get_str_method(int i);
 int get_int_http_prot(const char *s);
 const char *get_str_http_prot(int i);
 
-const char *get_str_operation(int i);
-
-int clean_path(char *path);
-const char *content_type(const char *s);
-
-const char *base_name(const char *path);
-int parse_startline_request(Connect *req, char *s);
-int parse_headers(Connect *req, char *s, int n);
-
 const char *get_str_operation(OPERATION_TYPE n);
 const char *get_cgi_operation(CGI_OPERATION n);
 const char *get_fcgi_operation(FCGI_OPERATION n);
@@ -399,6 +418,14 @@ const char *get_fcgi_status(FCGI_STATUS n);
 const char *get_scgi_operation(SCGI_OPERATION n);
 const char *get_cgi_type(CGI_TYPE n);
 const char *get_cgi_dir(DIRECT n);
+
+int clean_path(char *path);
+const char *content_type(const char *s);
+
+const char *base_name(const char *path);
+int parse_startline_request(Connect *req, char *s);
+int parse_headers(Connect *req, char *s, int n);
+int find_empty_line(Connect *req);
 //----------------------------------------------------------------------
 void create_logfiles(const std::string &);
 void close_logs(void);
@@ -409,6 +436,8 @@ void print_log(Connect *req);
 int timedwait_close_cgi();
 void cgi_dec();
 //----------------------------------------------------------------------
+void push_resp_list(Connect *r);
+Connect *pop_resp_list();
 void end_response(Connect *req);
 void close_connect(Connect *req);
 //----------------------------------------------------------------------

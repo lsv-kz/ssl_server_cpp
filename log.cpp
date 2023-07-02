@@ -94,7 +94,7 @@ void print_log(Connect *req)
             << get_str_http_prot(req->httpProt) << "\" "
             << req->respStatus << " " << req->send_bytes << " "
             << "\"" << ((req->req_hd.iReferer >= 0) ? req->reqHdValue[req->req_hd.iReferer] : "-") << "\" "
-            << "\"" << ((req->req_hd.iUserAgent >= 0) ? req->reqHdValue[req->req_hd.iUserAgent] : "-") << "\" " << req->connKeepAlive << "\n";
+            << "\"" << ((req->req_hd.iUserAgent >= 0) ? req->reqHdValue[req->req_hd.iUserAgent] : "-") << "\"\n";
     }
 //mtxLog.lock();
     write(flog, ss.c_str(), ss.size());

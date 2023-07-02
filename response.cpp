@@ -2,92 +2,104 @@
 
 using namespace std;
 //======================================================================
-void response1(Connect *req)
+void response1(int n_proc)
 {
-    for (int i = 1; i < req->countReqHeaders; ++i)
-    {
-        int ret = parse_headers(req, req->reqHdName[i], i);
-        if (ret < 0)
-        {
-            print_err(req, "<%s:%d>  Error parse_headers(): %d\n", __func__, __LINE__, ret);
-            goto end;
-        }
-    }
-#ifdef TCP_CORK_
-    if (conf->TcpCork == 'y')
-    {
-    #if defined(LINUX_)
-        int optval = 1;
-        setsockopt(req->clientSocket, SOL_TCP, TCP_CORK, &optval, sizeof(optval));
-    #elif defined(FREEBSD_)
-        int optval = 1;
-        setsockopt(req->clientSocket, IPPROTO_TCP, TCP_NOPUSH, &optval, sizeof(optval));
-    #endif
-    }
-#endif
-    //--------------------------------------------------------------
-    if ((req->httpProt != HTTP10) && (req->httpProt != HTTP11))
-    {
-        req->err = -RS505;
-        goto end;
-    }
-
-    if (req->numReq >= (unsigned int)conf->MaxRequestsPerClient || (req->httpProt == HTTP10))
-        req->connKeepAlive = 0;
-    else if (req->req_hd.iConnection == -1)
-        req->connKeepAlive = 1;
-
     const char *p;
-    if ((p = strchr(req->uri, '?')))
-    {
-        req->uriLen = p - req->uri;
-        req->sReqParam = p + 1;
-    }
-    else
-        req->sReqParam = NULL;
+    Connect *req;
 
-    if (decode(req->uri, req->uriLen, req->decodeUri, sizeof(req->decodeUri)) <= 0)
+    while (1)
     {
-        print_err(req, "<%s:%d> Error: decode URI\n", __func__, __LINE__);
-        req->err = -RS404;
-        goto end;
-    }
-
-    clean_path(req->decodeUri);
-    req->lenDecodeUri = strlen(req->decodeUri);
-
-    if (strstr(req->uri, ".php") && (conf->UsePHP != "php-cgi") && (conf->UsePHP != "php-fpm"))
-    {
-        print_err(req, "<%s:%d> Error UsePHP=%s\n", __func__, __LINE__, conf->UsePHP.c_str());
-        req->err = -RS404;
-        goto end;
-    }
-
-    if (req->req_hd.iUpgrade >= 0)
-    {
-        print_err(req, "<%s:%d> req->upgrade: %s\n", __func__, __LINE__, req->reqHdValue[req->req_hd.iUpgrade]);
-        req->err = -RS505;
-        goto end;
-    }
-    //--------------------------------------------------------------
-    if ((req->reqMethod == M_GET) || 
-        (req->reqMethod == M_HEAD) || 
-        (req->reqMethod == M_POST) || 
-        (req->reqMethod == M_OPTIONS))
-    {
-        int ret = response2(req);
-        if (ret == 1)
-        {// "req" may be free !!!
+        req = pop_resp_list();
+        if (!req)
+        {
+            print_err("%d<%s:%d>  Error pop_resp_list()=NULL\n", n_proc, __func__, __LINE__);
             return;
         }
+        //--------------------------------------------------------------
+        for (int i = 1; i < req->countReqHeaders; ++i)
+        {
+            int ret = parse_headers(req, req->reqHdName[i], i);
+            if (ret < 0)
+            {
+                print_err(req, "<%s:%d>  Error parse_headers(): %d\n", __func__, __LINE__, ret);
+                goto end;
+            }
+        }
+    #ifdef TCP_CORK_
+        if (conf->TcpCork == 'y')
+        {
+        #if defined(LINUX_)
+            int optval = 1;
+            setsockopt(req->clientSocket, SOL_TCP, TCP_CORK, &optval, sizeof(optval));
+        #elif defined(FREEBSD_)
+            int optval = 1;
+            setsockopt(req->clientSocket, IPPROTO_TCP, TCP_NOPUSH, &optval, sizeof(optval));
+        #endif
+        }
+    #endif
+        //--------------------------------------------------------------
+        if ((req->httpProt != HTTP10) && (req->httpProt != HTTP11))
+        {
+            req->err = -RS505;
+            goto end;
+        }
 
-        req->err = ret;
+        if (req->numReq >= (unsigned int)conf->MaxRequestsPerClient || (req->httpProt == HTTP10))
+            req->connKeepAlive = 0;
+        else if (req->req_hd.iConnection == -1)
+            req->connKeepAlive = 1;
+
+        if ((p = strchr(req->uri, '?')))
+        {
+            req->uriLen = p - req->uri;
+            req->sReqParam = p + 1;
+        }
+        else
+            req->sReqParam = NULL;
+
+        if (decode(req->uri, req->uriLen, req->decodeUri, sizeof(req->decodeUri)) <= 0)
+        {
+            print_err(req, "<%s:%d> Error: decode URI\n", __func__, __LINE__);
+            req->err = -RS404;
+            goto end;
+        }
+
+        clean_path(req->decodeUri);
+        req->lenDecodeUri = strlen(req->decodeUri);
+
+        if (strstr(req->uri, ".php") && (conf->UsePHP != "php-cgi") && (conf->UsePHP != "php-fpm"))
+        {
+            print_err(req, "<%s:%d> Error UsePHP=%s\n", __func__, __LINE__, conf->UsePHP.c_str());
+            req->err = -RS404;
+            goto end;
+        }
+
+        if (req->req_hd.iUpgrade >= 0)
+        {
+            print_err(req, "<%s:%d> req->upgrade: %s\n", __func__, __LINE__, req->reqHdValue[req->req_hd.iUpgrade]);
+            req->err = -RS505;
+            goto end;
+        }
+        //--------------------------------------------------------------
+        if ((req->reqMethod == M_GET) || 
+            (req->reqMethod == M_HEAD) || 
+            (req->reqMethod == M_POST) || 
+            (req->reqMethod == M_OPTIONS))
+        {
+            int ret = response2(req);
+            if (ret == 1)
+            {// "req" may be free !!!
+                continue;
+            }
+
+            req->err = ret;
+        }
+        else
+            req->err = -RS405;
+
+    end:
+        end_response(req);
     }
-    else
-        req->err = -RS405;
-
-end:
-    end_response(req);
 }
 //======================================================================
 int send_file(Connect *req);
