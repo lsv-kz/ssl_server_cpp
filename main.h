@@ -156,9 +156,9 @@ struct Config
     char SendFile;
     int SndBufSize;
 
-    unsigned int NumCpuCores;
-
     int MaxWorkConnections;
+
+    char BalancedLoad;
 
     unsigned int NumProc;
     unsigned int MaxNumProc;
@@ -433,8 +433,9 @@ void print_err(const char *format, ...);
 void print_err(Connect *req, const char *format, ...);
 void print_log(Connect *req);
 //----------------------------------------------------------------------
-int timedwait_close_cgi();
-void cgi_dec();
+int timeout_cgi(Connect *r);
+int timeout_fcgi(Connect *r);
+int timeout_scgi(Connect *r);
 //----------------------------------------------------------------------
 void push_resp_list(Connect *r);
 Connect *pop_resp_list();

@@ -64,7 +64,7 @@ void create_conf_file(const char *path)
     fprintf(f, "SendFile  y\n");
     fprintf(f, "SndBufSize  32768\n\n");
 
-    fprintf(f, "NumCpuCores  1\n");
+    fprintf(f, "BalancedLoad  y  #n/y\n");
     fprintf(f, "MaxWorkConnections  768\n");
 
     fprintf(f, "NumProc  1\n");
@@ -315,8 +315,8 @@ int read_conf_file(FILE *fconf)
                 c.SendFile = (char)tolower(s2[0]);
             else if ((s1 == "SndBufSize") && is_number(s2.c_str()))
                 s2 >> c.SndBufSize;
-            else if ((s1 == "NumCpuCores") && is_number(s2.c_str()))
-                s2 >> c.NumCpuCores;
+            else if ((s1 == "BalancedLoad") && is_bool(s2.c_str()))
+                c.BalancedLoad = (char)tolower(s2[0]);
             else if ((s1 == "MaxWorkConnections") && is_number(s2.c_str()))
                 s2 >> c.MaxWorkConnections;
             else if ((s1 == "TimeoutPoll") && is_number(s2.c_str()))
@@ -494,40 +494,36 @@ int read_conf_file(FILE *fconf)
         exit(1);
     }
     //------------------------------------------------------------------
-    if ((c.NumThreads > 8) || (c.NumThreads < 1))
+    if ((conf->MaxNumProc < 1) || (conf->MaxNumProc > PROC_LIMIT))
     {
-        fprintf(stderr, "<%s:%d> Error: NumThreads=%d\n", __func__, __LINE__, c.NumThreads);
+        fprintf(stderr, "<%s:%d> Error MaxNumProc = %d; [1 <= MaxNumProc <= %d]\n", __func__, __LINE__, conf->MaxNumProc, PROC_LIMIT);
         return -1;
     }
+
+    if ((conf->NumProc < 1) || (conf->NumProc > conf->MaxNumProc))
+    {
+        fprintf(stderr, "<%s:%d> Error: NumProc=%u; MaxNumProc=%u\n", __func__, __LINE__, conf->NumProc, conf->MaxNumProc);
+        return -1;
+    }
+
+    if (conf->NumProc == 1)
+        c.BalancedLoad = 'n';
     //------------------------------------------------------------------
-    //c.NumCpuCores = thread::hardware_concurrency();
-    if (c.NumCpuCores == 0)
-        c.NumCpuCores = 1;
-
-    if ((c.MaxNumProc < 1) || (c.MaxNumProc > PROC_LIMIT))
+    if ((conf->NumThreads > 6) || (conf->NumThreads < 1))
     {
-        fprintf(stderr, "<%s:%d> Error MaxNumProc = %d; [1 <= MaxNumProc <= 8]\n", __func__, __LINE__, c.MaxNumProc);
+        fprintf(stderr, "<%s:%d> Error: NumThreads=%d\n", __func__, __LINE__, conf->NumThreads);
         return -1;
     }
-
-    if (c.NumProc > c.MaxNumProc)
-    {
-        fprintf(stderr, "<%s:%d> Error: NumProc=%u; MaxNumProc=%u\n", __func__, __LINE__, c.NumProc, c.MaxNumProc);
-        return -1;
-    }
-
-    if ((c.NumCpuCores > 1) && (c.NumProc == 1))
-        c.NumProc = 2;
     //------------------- Setting OPEN_MAX -----------------------------
-    if (c.MaxWorkConnections <= 0)
+    if (conf->MaxWorkConnections <= 0)
     {
-        fprintf(stderr, "<%s:%d> Error config file: MaxWorkConnections=%d\n", __func__, __LINE__, c.MaxWorkConnections);
+        fprintf(stderr, "<%s:%d> Error config file: MaxWorkConnections=%d\n", __func__, __LINE__, conf->MaxWorkConnections);
         return -1;
     }
 
     const int fd_stdio = 3, fd_logs = 2, fd_sock = 1, fd_pipe = 2; // 8
     long min_open_fd = fd_stdio + fd_logs + fd_sock + fd_pipe;
-    int max_fd = min_open_fd + c.MaxWorkConnections * 2;
+    int max_fd = min_open_fd + conf->MaxWorkConnections * 2;
     n = set_max_fd(max_fd);
     if (n == -1)
         return -1;
@@ -537,7 +533,7 @@ int read_conf_file(FILE *fconf)
         c.MaxWorkConnections = n;
     }
     //------------------------------------------------------------------
-    if (c.Protocol == HTTPS)
+    if (conf->Protocol == HTTPS)
     {
         if (!(c.ctx = Init_SSL()))
         {

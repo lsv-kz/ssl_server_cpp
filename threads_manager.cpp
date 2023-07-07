@@ -1,7 +1,7 @@
 #include "main.h"
 
 using namespace std;
-
+//======================================================================
 static mutex mtx_conn;
 static condition_variable cond_close_conn;
 static int num_conn = 0;
@@ -36,15 +36,14 @@ mtx_list.unlock();
 Connect *RequestManager::pop_resp_list()
 {
 unique_lock<mutex> lk(mtx_list);
-    while (list_start == NULL)
+    while ((list_start == NULL) && !stop_manager)
     {
         cond_list.wait(lk);
-        if (stop_manager)
-            return NULL;
     }
+    if (stop_manager)
+        return NULL;
 
     Connect *req = list_start;
-
     if (list_start->next)
     {
         list_start->next->prev = NULL;
@@ -69,6 +68,15 @@ mtx_conn.lock();
 mtx_conn.unlock();
 }
 //======================================================================
+void wait_close_all_conn()
+{
+unique_lock<mutex> lk(mtx_conn);
+    while (num_conn > 0)
+    {
+        cond_close_conn.wait(lk);
+    }
+}
+//======================================================================
 int is_maxconn()
 {
 mtx_conn.lock();
@@ -77,15 +85,6 @@ mtx_conn.lock();
         n = 1;
 mtx_conn.unlock();
     return n;
-}
-//======================================================================
-void wait_close_all_conn()
-{
-unique_lock<mutex> lk(mtx_conn);
-    while (num_conn > 0)
-    {
-        cond_close_conn.wait(lk);
-    }
 }
 //======================================================================
 void close_connect(Connect *req)
@@ -124,7 +123,7 @@ void end_response(Connect *req)
         if (req->err <= -RS101)
         {
             req->respStatus = -req->err;
-            req->err = -1;
+            req->err = 0;
             req->hdrs = "";
             if (send_message(req, NULL) == 1)
                 return;
@@ -363,7 +362,7 @@ void manager(int sockServer, unsigned int numProc, int fd_in, int fd_out, char s
         {
             if (errno == EINTR)
                 continue;
-            print_err("[%d] <%s:%d> Error poll()=-1: %s\n", numProc, __func__, __LINE__, strerror(errno));
+            print_err("[%d]<%s:%d> Error poll()=-1: %s\n", numProc, __func__, __LINE__, strerror(errno));
             break;
         }
 
@@ -373,7 +372,7 @@ void manager(int sockServer, unsigned int numProc, int fd_in, int fd_out, char s
             unsigned char ch;
             if (read_(fd_in, &ch, sizeof(ch)) <= 0)
             {
-                print_err("[%d] <%s:%d> Error read(): %s\n", numProc, __func__, __LINE__, strerror(errno));
+                print_err("[%d]<%s:%d> Error read(): %s\n", numProc, __func__, __LINE__, strerror(errno));
                 break;
             }
 
@@ -398,7 +397,7 @@ void manager(int sockServer, unsigned int numProc, int fd_in, int fd_out, char s
                 if ((errno == EAGAIN) || (errno == EINTR) || (errno == EMFILE))
                     continue;
                 break;
-                print_err("[%d] <%s:%d>  Error accept(): %s\n", numProc, __func__, __LINE__, strerror(errno));
+                print_err("[%d]<%s:%d>  Error accept(): %s\n", numProc, __func__, __LINE__, strerror(errno));
             }
 
             Connect *req;
@@ -414,7 +413,6 @@ void manager(int sockServer, unsigned int numProc, int fd_in, int fd_out, char s
             ioctl(clientSocket, FIONBIO, &opt);
 
             req->init();
-            get_time(req->sTime);
             req->numProc = numProc;
             req->numConn = ++allConn;
             req->numReq = 1;
@@ -474,12 +472,12 @@ void manager(int sockServer, unsigned int numProc, int fd_in, int fd_out, char s
 
         if (ret_poll)
         {
-            print_err("[%d] <%s:%d>  Error: revents=0x%x; socket revents=0x%x\n",
+            print_err("[%d]<%s:%d>  Error: revents=0x%x; socket revents=0x%x\n",
                         numProc, __func__, __LINE__, fdrd[0].revents, fdrd[1].revents);
             break;
         }
 
-        if (conf->NumCpuCores >= 4)
+        if (conf->BalancedLoad == 'y')
         {
             status = CONNECT_IGN;
             char ch = CONNECT_ALLOW;

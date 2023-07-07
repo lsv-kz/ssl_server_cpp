@@ -11,14 +11,11 @@ static void cgi_set_poll_list(Connect *r, int *);
 
 void cgi_worker(Connect* r);
 void cgi_set_status_readheaders(Connect *r);
-int timeout_cgi(Connect *r);
 
 void fcgi_set_poll_list(Connect *r, int *i);
 void fcgi_worker(Connect* r);
-int timeout_fcgi(Connect *r);
 
 void scgi_worker(Connect* r);
-int timeout_scgi(Connect *r);
 //======================================================================
 const char *get_script_name(const char *name)
 {
@@ -696,6 +693,7 @@ void cgi_worker(Connect* r)
                 r->resp_headers.p = r->resp_headers.s.c_str();
                 r->resp_headers.len = r->resp_headers.s.size();
                 r->cgi->op.cgi = CGI_SEND_HTTP_HEADERS;
+                r->cgi->dir = TO_CLIENT;
                 r->sock_timer = 0;
             }
         }
