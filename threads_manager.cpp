@@ -99,7 +99,7 @@ void close_connect(Connect *req)
             if (ret < 0)
             {
                 ret = SSL_get_error(req->tls.ssl, ret);
-                print_err(req, "<%s:%d> SSL_get_error(): %s\n", __func__, __LINE__, ssl_strerror(ret));
+                print_err(req, "<%s:%d> Error SSL_shutdown(): %s\n", __func__, __LINE__, ssl_strerror(ret));
             }
         }
 
@@ -118,7 +118,7 @@ mtx_conn.unlock();
 //======================================================================
 void end_response(Connect *req)
 {
-    if (req->connKeepAlive == 0 || (req->err < 0))
+    if ((req->connKeepAlive == 0) || (req->err < 0))
     { // ----- Close connect -----
         if (req->err <= -RS101)
         {
@@ -494,7 +494,6 @@ void manager(int sockServer, unsigned int numProc, int fd_in, int fd_out, char s
                     __func__, __LINE__, ReqMan->get_all_request(), num_conn, (unsigned int)status);
 
     ReqMan->close_manager();
-
     close_event_handler();
     EventHandler.join();
 

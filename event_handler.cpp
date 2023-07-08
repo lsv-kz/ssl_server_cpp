@@ -527,7 +527,7 @@ static int worker(int num_chld)
         }
     }
 
-    return i;
+    return 0;
 }
 //======================================================================
 void event_handler(int num_chld)
@@ -625,16 +625,16 @@ void push_send_file(Connect *r)
     r->resp_headers.p = r->resp_headers.s.c_str();
     r->resp_headers.len = r->resp_headers.s.size();
 
-    r->event = POLLOUT;
     r->source_entity = FROM_FILE;
     r->operation = SEND_RESP_HEADERS;
+    r->event = POLLOUT;
     add_wait_list(r);
 }
 //======================================================================
 void push_pollin_list(Connect *r)
 {
-    r->event = POLLIN;
     r->source_entity = NO_ENTITY;
+    r->event = POLLIN;
     add_wait_list(r);
 }
 //======================================================================
@@ -643,17 +643,17 @@ void push_send_multipart(Connect *r)
     r->resp_headers.p = r->resp_headers.s.c_str();
     r->resp_headers.len = r->resp_headers.s.size();
     
-    r->event = POLLOUT;
     r->source_entity = MULTIPART_ENTITY;
     r->operation = SEND_RESP_HEADERS;
+    r->event = POLLOUT;
     add_wait_list(r);
 }
 //======================================================================
 void push_send_html(Connect *r)
 {
-    r->event = POLLOUT;
     r->source_entity = FROM_DATA_BUFFER;
     r->operation = SEND_RESP_HEADERS;
+    r->event = POLLOUT;
     add_wait_list(r);
 }
 //======================================================================
@@ -764,23 +764,23 @@ static void worker(Connect *r)
         if (r->source_entity == FROM_FILE)
         {
             int wr = send_part_file(r);
-            if (wr == 0)
-            {
-                del_from_list(r);
-                end_response(r);
-            }
-            else if (wr < 0)
+            if (wr < 0)
             {
                 if (wr == ERR_TRY_AGAIN)
                     r->io_status = POLL;
                 else
                 {
-                    r->err = wr;
+                    r->err = -1;
                     r->req_hd.iReferer = MAX_HEADERS - 1;
                     r->reqHdValue[r->req_hd.iReferer] = "Connection reset by peer";
                     del_from_list(r);
                     end_response(r);
                 }
+            }
+            else if (wr == 0)
+            {
+                del_from_list(r);
+                end_response(r);
             }
             else // (wr > 0)
                 r->sock_timer = 0;
@@ -806,7 +806,7 @@ static void worker(Connect *r)
                         r->io_status = POLL;
                     else
                     {
-                        r->err = wr;
+                        r->err = -1;
                         r->req_hd.iReferer = MAX_HEADERS - 1;
                         r->reqHdValue[r->req_hd.iReferer] = "Connection reset by peer";
                         del_from_list(r);
@@ -838,18 +838,21 @@ static void worker(Connect *r)
         else if (r->source_entity == FROM_DATA_BUFFER)
         {
             int wr = send_html(r);
-            if (wr == 0)
+            if (wr < 0)
             {
-                del_from_list(r);
-                end_response(r);
+                if (wr == ERR_TRY_AGAIN)
+                    r->io_status = POLL;
+                else
+                {
+                    r->err = -1;
+                    r->req_hd.iReferer = MAX_HEADERS - 1;
+                    r->reqHdValue[r->req_hd.iReferer] = "Connection reset by peer";
+                    del_from_list(r);
+                    end_response(r);
+                }
             }
-            else if (wr == ERR_TRY_AGAIN)
-                r->io_status = POLL;
-            else if (wr < 0)
+            else if (wr == 0)
             {
-                r->err = -1;
-                r->req_hd.iReferer = MAX_HEADERS - 1;
-                r->reqHdValue[r->req_hd.iReferer] = "Connection reset by peer";
                 del_from_list(r);
                 end_response(r);
             }
@@ -939,14 +942,14 @@ static void worker(Connect *r)
                 del_from_list(r);
                 close_connect(r);
             }
-            return;
         }
-
-        r->tls.err = 0;
-        r->operation = READ_REQUEST;
-        r->io_status = WORK;
-        r->event = POLLIN;
-        r->sock_timer = 0;
+        else
+        {
+            r->operation = READ_REQUEST;
+            r->io_status = WORK;
+            r->event = POLLIN;
+            r->sock_timer = 0;
+        }
     }
     else if (r->operation == SSL_SHUTDOWN)
     {
@@ -976,7 +979,8 @@ static void worker(Connect *r)
     }
     else
     {
-        fprintf(stderr, "<%s:%d> ? operation=%s\n", __func__, __LINE__, get_str_operation(r->operation));
+        print_err(r, "<%s:%d> ? operation=%s\n", __func__, __LINE__, get_str_operation(r->operation));
+        r->err = -1;
         del_from_list(r);
         end_response(r);
     }

@@ -472,20 +472,20 @@ int read_conf_file(FILE *fconf)
     //------------------------------------------------------------------
     if (check_path(c.LogPath) == -1)
     {
-        fprintf(stderr, "!!! Error LogPath [%s]\n", c.LogPath.c_str());
+        fprintf(stderr, "!!! Error LogPath [%s]\n", conf->LogPath.c_str());
         return -1;
     }
     //------------------------------------------------------------------
     if (check_path(c.DocumentRoot) == -1)
     {
-        fprintf(stderr, "!!! Error DocumentRoot [%s]\n", c.DocumentRoot.c_str());
+        fprintf(stderr, "!!! Error DocumentRoot [%s]\n", conf->DocumentRoot.c_str());
         return -1;
     }
     //------------------------------------------------------------------
     if (check_path(c.ScriptPath) == -1)
     {
         c.ScriptPath = "";
-        fprintf(stderr, "!!! Error ScriptPath [%s]\n", c.ScriptPath.c_str());
+        fprintf(stderr, "!!! Error ScriptPath [%s]\n", conf->ScriptPath.c_str());
     }
     //------------------------------------------------------------------
     if (conf->SndBufSize <= 0)
@@ -496,7 +496,7 @@ int read_conf_file(FILE *fconf)
     //------------------------------------------------------------------
     if ((conf->MaxNumProc < 1) || (conf->MaxNumProc > PROC_LIMIT))
     {
-        fprintf(stderr, "<%s:%d> Error MaxNumProc = %d; [1 <= MaxNumProc <= %d]\n", __func__, __LINE__, conf->MaxNumProc, PROC_LIMIT);
+        fprintf(stderr, "<%s:%d> Error MaxNumProc=%d; [1 <= MaxNumProc <= %d]\n", __func__, __LINE__, conf->MaxNumProc, PROC_LIMIT);
         return -1;
     }
 
@@ -509,7 +509,7 @@ int read_conf_file(FILE *fconf)
     if (conf->NumProc == 1)
         c.BalancedLoad = 'n';
     //------------------------------------------------------------------
-    if ((conf->NumThreads > 6) || (conf->NumThreads < 1))
+    if ((conf->NumThreads < 1) || (6 < conf->NumThreads))
     {
         fprintf(stderr, "<%s:%d> Error: NumThreads=%d\n", __func__, __LINE__, conf->NumThreads);
         return -1;

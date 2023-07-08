@@ -537,18 +537,16 @@ pid_t create_child(int sock, unsigned int num_chld, int *pfd_i, int fd_close, ch
 //======================================================================
 int read_from_pipe(int fd, char *buf, int len, int timeout)
 {
-    int read_bytes = 0, ret, tm;
+    int read_bytes = 0, ret;
     struct pollfd fdrd;
     char *p = buf;
-    
-    tm = (timeout == -1) ? -1 : (timeout * 1000);
 
     fdrd.fd = fd;
     fdrd.events = POLLIN;
 
     while (len > 0)
     {
-        ret = poll(&fdrd, 1, tm);
+        ret = poll(&fdrd, 1, timeout * 1000);
         if (ret == -1)
         {
             if (errno == EINTR)
