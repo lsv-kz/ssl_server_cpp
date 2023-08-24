@@ -91,18 +91,6 @@ void close_connect(Connect *req)
 {
     if ((req->Protocol == HTTPS) && (req->tls.ssl))
     {
-        if ((req->tls.err != SSL_ERROR_SSL) && 
-            (req->tls.err != SSL_ERROR_SYSCALL) && 
-            (req->operation != SSL_ACCEPT))
-        {    
-            int ret = SSL_shutdown(req->tls.ssl);
-            if (ret < 0)
-            {
-                ret = SSL_get_error(req->tls.ssl, ret);
-                print_err(req, "<%s:%d> Error SSL_shutdown(): %s\n", __func__, __LINE__, ssl_strerror(ret));
-            }
-        }
-
         SSL_free(req->tls.ssl);
     }
 
@@ -123,7 +111,7 @@ void end_response(Connect *req)
         if (req->err <= -RS101)
         {
             req->respStatus = -req->err;
-            req->err = 0;
+            req->err = -1;
             req->hdrs = "";
             if (send_message(req, NULL) == 1)
                 return;
@@ -135,7 +123,7 @@ void end_response(Connect *req)
             print_log(req);
         }
 
-        if ((req->Protocol == HTTPS) && (req->tls.ssl) && (req->tls.err == 0))
+        if ((req->Protocol == HTTPS) && (req->tls.ssl))
         {
     #ifdef TCP_CORK_
             if (conf->TcpCork == 'y')
@@ -149,30 +137,44 @@ void end_response(Connect *req)
             #endif
             }
     #endif
-            int n = SSL_get_shutdown(req->tls.ssl);
-            if (n == SSL_SENT_SHUTDOWN)
-                print_err(req, "<%s:%d> SSL_get_shutdown(): SSL_SENT_SHUTDOWN\n", __func__, __LINE__);
-
             if ((req->tls.err != SSL_ERROR_SSL) && 
                 (req->tls.err != SSL_ERROR_SYSCALL))
             {
                 int ret = SSL_shutdown(req->tls.ssl);
-                if ((ret == 0) && (req->operation != SSL_SHUTDOWN))
+                if (ret == -1)
+                {
+                    req->tls.err = SSL_get_error(req->tls.ssl, ret);
+                    print_err(req, "<%s:%d> Error SSL_shutdown()=%d, err=%s\n", __func__, __LINE__, ret, ssl_strerror(req->tls.err));
+                    if (req->tls.err == SSL_ERROR_ZERO_RETURN)
+                    {
+                        close_connect(req);
+                        return;
+                    }
+                    else if (req->tls.err == SSL_ERROR_WANT_READ)
+                    {
+                        req->event = POLLIN;
+                        req->operation = SSL_SHUTDOWN;
+                        push_pollin_list(req);
+                        return;
+                    }
+                    else if (req->tls.err == SSL_ERROR_WANT_WRITE)
+                    {
+                        req->event = POLLOUT;
+                        req->operation = SSL_SHUTDOWN;
+                        push_pollin_list(req);
+                        return;
+                    }
+                }
+                else if (ret == 0)
                 {
                     req->operation = SSL_SHUTDOWN;
                     push_pollin_list(req);
                     return;
                 }
-                else if (ret == -1)
-                {
-                    req->tls.err = SSL_get_error(req->tls.ssl, ret);
-                    print_err(req, "<%s:%d> Error SSL_shutdown(): %s\n", __func__, __LINE__, ssl_strerror(req->tls.err));
-                }
             }
             else
             {
-                if (n == SSL_SENT_SHUTDOWN)
-                    print_err(req, "<%s:%d> SSL_get_shutdown(): SSL_SENT_SHUTDOWN\n", __func__, __LINE__);
+                print_err(req, "<%s:%d> tls.err: %s\n", __func__, __LINE__, ssl_strerror(req->tls.err));
             }
         }
 

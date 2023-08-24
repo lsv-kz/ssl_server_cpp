@@ -131,7 +131,7 @@ int create_fcgi_socket(Connect *r, const char *host)
     else //==== PF_UNIX ====
     {
         struct sockaddr_un sock_addr;
-        sockfd = socket (PF_UNIX, SOCK_STREAM, 0);
+        sockfd = socket(PF_UNIX, SOCK_STREAM, 0);
         if (sockfd == -1)
         {
             print_err(r, "<%s:%d> Error socket(): %s\n", __func__, __LINE__, strerror(errno));

@@ -304,7 +304,7 @@ public:
 
     String scriptName;
     CGI_TYPE cgi_type;
-    Cgi *cgi;
+    Cgi cgi;
 
     struct
     {
