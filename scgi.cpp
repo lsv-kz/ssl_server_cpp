@@ -2,8 +2,6 @@
 
 using namespace std;
 //======================================================================
-extern struct pollfd *poll_fd;
-
 int get_sock_fcgi(Connect *req, const char *script);
 void del_from_list(Connect *r);
 int scgi_set_param(Connect *r);
@@ -41,7 +39,7 @@ int scgi_set_size_data(Connect* r)
 int scgi_create_connect(Connect *req)
 {
     req->cgi.op.scgi = SCGI_CONNECT;
-    req->cgi.dir = TO_CGI;
+    req->io_direct = TO_CGI;
     if (req->reqMethod == M_POST)
     {
         if (req->req_hd.iReqContentType < 0)
@@ -219,7 +217,7 @@ int scgi_create_connect(Connect *req)
     req->fcgi.i_param = 0;
     
     req->cgi.op.scgi = SCGI_PARAMS;
-    req->cgi.dir = TO_CGI;
+    req->io_direct = TO_CGI;
     req->cgi.len_buf = 0;
     req->sock_timer = 0;
     
@@ -330,7 +328,7 @@ void scgi_worker(Connect* r)
                 r->cgi.op.scgi = SCGI_STDIN;
                 if (r->lenTail > 0)
                 {
-                    r->cgi.dir = TO_CGI;
+                    r->io_direct = TO_CGI;
                     r->cgi.p = r->tail;
                     r->cgi.len_buf = r->lenTail;
                     r->tail = NULL;
@@ -338,13 +336,13 @@ void scgi_worker(Connect* r)
                 }
                 else
                 {
-                    r->cgi.dir = FROM_CLIENT;
+                    r->io_direct = FROM_CLIENT;
                 }
             }
             else
             {
                 r->cgi.op.scgi = SCGI_READ_HTTP_HEADERS;
-                r->cgi.dir = FROM_CGI;
+                r->io_direct = FROM_CGI;
                 r->tail = NULL;
                 r->lenTail = 0;
                 r->p_newline = r->cgi.p = r->cgi.buf + 8;
@@ -400,7 +398,7 @@ void scgi_worker(Connect* r)
                     r->resp_headers.p = r->resp_headers.s.c_str();
                     r->resp_headers.len = r->resp_headers.s.size();
                     r->cgi.op.scgi = SCGI_SEND_HTTP_HEADERS;
-                    r->cgi.dir = TO_CLIENT;
+                    r->io_direct = TO_CLIENT;
                     r->sock_timer = 0;
                 }
             }
@@ -446,7 +444,7 @@ void scgi_worker(Connect* r)
                                 r->cgi.len_buf = r->lenTail;
                                 r->tail = NULL;
                                 r->lenTail = 0;
-                                r->cgi.dir = TO_CLIENT;
+                                r->io_direct = TO_CLIENT;
                                 if (r->mode_send == CHUNK)
                                 {
                                     if (cgi_set_size_chunk(r))
@@ -461,7 +459,7 @@ void scgi_worker(Connect* r)
                             {
                                 r->cgi.len_buf = 0;
                                 r->cgi.p = NULL;
-                                r->cgi.dir = FROM_CGI;
+                                r->io_direct = FROM_CGI;
                             }
                         }
                     }
@@ -511,10 +509,10 @@ void scgi_worker(Connect* r)
     }
 }
 //======================================================================
-int timeout_scgi(Connect *r)
+int scgi_err(Connect *r)
 {
     if (((r->cgi.op.scgi == SCGI_PARAMS) || (r->cgi.op.scgi == SCGI_STDIN)) && 
-         (r->cgi.dir == TO_CGI))
+         (r->io_direct == TO_CGI))
         return -RS504;
     else if (r->cgi.op.scgi == SCGI_READ_HTTP_HEADERS)
         return -RS504;

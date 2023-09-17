@@ -33,7 +33,7 @@ int create_multipart_head(Connect *req);
 void set_part(Connect *r);
 int send_headers(Connect *r);
 static void worker(Connect *r);
-static void func_choose(Connect *r);
+static void choose_worker(Connect *r);
 
 void cgi_set_poll_list(Connect *r, int *n, time_t t);
 
@@ -359,7 +359,7 @@ static int worker(int num_chld)
         if (r->io_status == WORK)
         {
             --all;
-            func_choose(r);
+            choose_worker(r);
         }
         else
         {
@@ -367,7 +367,7 @@ static int worker(int num_chld)
             {
                 --all;
                 r->io_status = WORK;
-                func_choose(r);
+                choose_worker(r);
             }
             else if (poll_fd[i].revents)
             {
@@ -390,14 +390,14 @@ static int worker(int num_chld)
                         {
                             case CGI:
                             case PHPCGI:
-                                if ((r->cgi.op.cgi == CGI_SEND_ENTITY) && (r->cgi.dir == FROM_CGI))
+                                if ((r->cgi.op.cgi == CGI_SEND_ENTITY) && (r->io_direct == FROM_CGI))
                                 {
                                     if (r->mode_send == CHUNK)
                                     {
                                         r->cgi.len_buf = 0;
                                         r->cgi.p = r->cgi.buf + 8;
                                         cgi_set_size_chunk(r);
-                                        r->cgi.dir = TO_CLIENT;
+                                        r->io_direct = TO_CLIENT;
                                         r->mode_send = CHUNK_END;
                                         r->sock_timer = 0;
                                     }
@@ -410,7 +410,7 @@ static int worker(int num_chld)
                                 else
                                 {
                                     print_err(r, "<%s:%d> Error: events=0x%x(0x%x), %s/%s\n", __func__, __LINE__, 
-                                           poll_fd[i].events, poll_fd[i].revents, get_cgi_operation(r->cgi.op.cgi), get_cgi_dir(r->cgi.dir));
+                                           poll_fd[i].events, poll_fd[i].revents, get_cgi_operation(r->cgi.op.cgi), get_cgi_dir(r->io_direct));
                                     if (r->cgi.op.cgi <= CGI_READ_HTTP_HEADERS)
                                         r->err = -RS502;
                                     else
@@ -431,14 +431,14 @@ static int worker(int num_chld)
                                 end_response(r);
                                 break;
                             case SCGI:
-                                if ((r->cgi.op.scgi == SCGI_SEND_ENTITY) && (r->cgi.dir == FROM_CGI))
+                                if ((r->cgi.op.scgi == SCGI_SEND_ENTITY) && (r->io_direct == FROM_CGI))
                                 {
                                     if (r->mode_send == CHUNK)
                                     {
                                         r->cgi.len_buf = 0;
                                         r->cgi.p = r->cgi.buf + 8;
                                         cgi_set_size_chunk(r);
-                                        r->cgi.dir = TO_CLIENT;
+                                        r->io_direct = TO_CLIENT;
                                         r->mode_send = CHUNK_END;
                                         r->sock_timer = 0;
                                     }
@@ -698,7 +698,7 @@ int send_headers(Connect *r)
     return wr;
 }
 //======================================================================
-static void func_choose(Connect *r)
+static void choose_worker(Connect *r)
 {
     if (r->operation == DYN_PAGE)
     {

@@ -111,7 +111,7 @@ void end_response(Connect *req)
         if (req->err <= -RS101)
         {
             req->respStatus = -req->err;
-            req->err = -1;
+            req->err = 0;
             req->hdrs = "";
             if (send_message(req, NULL) == 1)
                 return;
