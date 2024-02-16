@@ -10,21 +10,18 @@ string get_time()
     time_t now = time(NULL);
 
     gmtime_r(&now, &t);
-
-    strftime(s, sizeof(s), "%a, %d %b %Y %H:%M:%S GMT", &t);
+    strftime(s, sizeof(s), "%a, %d %b %Y %H:%M:%S %Z", &t);
     return s;
 }
 //======================================================================
-void get_time(string& str)
+string get_time(time_t now)
 {
     struct tm t;
     char s[40];
-    time_t now = time(NULL);
 
     gmtime_r(&now, &t);
-
-    strftime(s, sizeof(s), "%a, %d %b %Y %H:%M:%S GMT", &t);
-    str = s;
+    strftime(s, sizeof(s), "%a, %d %b %Y %H:%M:%S %Z", &t);
+    return s;
 }
 //======================================================================
 string log_time()
@@ -33,9 +30,18 @@ string log_time()
     char s[40];
     time_t now = time(NULL);
 
-    gmtime_r(&now, &t);
+    localtime_r(&now, &t);
+    strftime(s, sizeof(s), "%d/%b/%Y:%H:%M:%S  %Z", &t);
+    return s;
+}
+//======================================================================
+string log_time(time_t now)
+{
+    struct tm t;
+    char s[40];
 
-    strftime(s, sizeof(s), "%d/%b/%Y:%H:%M:%S GMT", &t);
+    localtime_r(&now, &t);
+    strftime(s, sizeof(s), "%d/%b/%Y:%H:%M:%S  %Z", &t);
     return s;
 }
 //======================================================================

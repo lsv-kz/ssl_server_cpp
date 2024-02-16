@@ -488,6 +488,12 @@ int read_conf_file(FILE *fconf)
         fprintf(stderr, "!!! Error ScriptPath [%s]\n", conf->ScriptPath.c_str());
     }
     //------------------------------------------------------------------
+    if (check_path(c.PidFilePath) == -1)
+    {
+        fprintf(stderr, "!!! Error PidFilePath [%s]\n", conf->PidFilePath.c_str());
+        return -1;
+    }
+    //------------------------------------------------------------------
     if (conf->SndBufSize <= 0)
     {
         print_err("<%s:%d> Error: SndBufSize=%d\n", __func__, __LINE__, conf->SndBufSize);
@@ -559,7 +565,7 @@ int read_conf_file(const char *path_conf)
             char s[8];
             printf("Create config file? [y/n]: ");
             fflush(stdout);
-            fgets(s, sizeof(s), stdout);
+            fgets(s, sizeof(s), stdin);
             if (s[0] == 'y')
             {
                 create_conf_file(path_conf);

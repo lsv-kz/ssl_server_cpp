@@ -12,11 +12,10 @@ void response1(int num_proc)
         req = pop_resp_list();
         if (!req)
         {
-            print_err("%d<%s:%d>  Error pop_resp_list()=NULL\n", num_proc, __func__, __LINE__);
+            //print_err("%d<%s:%d> Error pop_resp_list()=NULL\n", num_proc, __func__, __LINE__);
             return;
         }
         //--------------------------------------------------------------
-        get_time(req->sTime);
         for (int i = 1; i < req->countReqHeaders; ++i)
         {
             int ret = parse_headers(req, req->reqHdName[i], i);
@@ -32,7 +31,8 @@ void response1(int num_proc)
         #if defined(LINUX_)
             int optval = 1;
             setsockopt(req->clientSocket, SOL_TCP, TCP_CORK, &optval, sizeof(optval));
-        #elif defined(FREEBSD_)
+        //#elif defined(FREEBSD_)
+        #else
             int optval = 1;
             setsockopt(req->clientSocket, IPPROTO_TCP, TCP_NOPUSH, &optval, sizeof(optval));
         #endif
@@ -328,7 +328,7 @@ int response2(Connect *req)
     if (req->reqMethod == M_OPTIONS)
         return options(req);
     //------------------------------------------------------------------
-    req->fd = open(path.c_str(), O_RDONLY);
+    req->fd = open(path.c_str(), O_RDONLY | O_CLOEXEC);
     if (req->fd == -1)
     {
         if (errno == EACCES)

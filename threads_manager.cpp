@@ -131,7 +131,8 @@ void end_response(Connect *req)
             #if defined(LINUX_)
                 int optval = 0;
                 setsockopt(req->clientSocket, SOL_TCP, TCP_CORK, &optval, sizeof(optval));
-            #elif defined(FREEBSD_)
+            //#elif defined(FREEBSD_)
+            #else
                 int optval = 0;
                 setsockopt(req->clientSocket, IPPROTO_TCP, TCP_NOPUSH, &optval, sizeof(optval));
             #endif
@@ -188,7 +189,8 @@ void end_response(Connect *req)
         #if defined(LINUX_)
             int optval = 0;
             setsockopt(req->clientSocket, SOL_TCP, TCP_CORK, &optval, sizeof(optval));
-        #elif defined(FREEBSD_)
+        //#elif defined(FREEBSD_)
+        #else
             int optval = 0;
             setsockopt(req->clientSocket, IPPROTO_TCP, TCP_NOPUSH, &optval, sizeof(optval));
         #endif
@@ -411,9 +413,33 @@ void manager(int sockServer, unsigned int numProc, int fd_in, int fd_out, char s
                 break;
             }
 
-            int opt = 1;
-            ioctl(clientSocket, FIONBIO, &opt);
+            int flags = 1;
+            if (ioctl(clientSocket, FIONBIO, &flags) == -1)
+            {
+                print_err("<%s:%d> Error ioctl(FIONBIO, 1): %s\n", __func__, __LINE__, strerror(errno));
+                break;
+            }
 
+            if (ioctl(clientSocket, FIOCLEX) == -1)
+            {
+                print_err("<%s:%d> Error ioctl(FIOCLEX): %s\n", __func__, __LINE__, strerror(errno));
+                break;
+            }
+/*
+            flags = fcntl(clientSocket, F_GETFD);
+            if (flags == -1)
+            {
+                print_err("<%s:%d> Error fcntl(F_GETFD): %s\n", __func__, __LINE__, strerror(errno));
+                break;
+            }
+
+            flags |= FD_CLOEXEC;
+            if (fcntl(clientSocket, F_SETFD, flags) == -1)
+            {
+                print_err("<%s:%d> Error fcntl(F_SETFD, FD_CLOEXEC): %s\n", __func__, __LINE__, strerror(errno));
+                break;
+            }
+*/
             req->init();
             req->numProc = numProc;
             req->numConn = ++allConn;

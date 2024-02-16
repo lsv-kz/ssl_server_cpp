@@ -473,13 +473,23 @@ static int worker(int num_chld)
                 {
                     print_err(r, "<%s:%d> Error: events=0x%x(0x%x)\n", __func__, __LINE__, poll_fd[i].events, poll_fd[i].revents);
                     del_from_list(r);
-                    if (r->operation > READ_REQUEST)
+                    if ((r->operation == SSL_ACCEPT) || 
+                        (r->operation == SSL_SHUTDOWN))
+                    {
+                        close_connect(r);
+                    }
+                    else if (r->operation > READ_REQUEST)
                     {
                         r->req_hd.iReferer = MAX_HEADERS - 1;
                         r->reqHdValue[r->req_hd.iReferer] = "Connection reset by peer";
+                        r->err = -1;
+                        end_response(r);
                     }
-                    r->err = -1;
-                    end_response(r);
+                    else
+                    {
+                        r->err = -1;
+                        end_response(r);
+                    }
                 }
             }
             /*else if (poll_fd[i].revents == 0)

@@ -6,7 +6,7 @@ const char *status_resp(int st);
 //======================================================================
 int create_response_headers(Connect *req)
 {
-    get_time(req->sTime);
+    req->Time = time(NULL);
     req->resp_headers.s = "";
     req->resp_headers.s.reserve(512);
     if (req->resp_headers.s.error())
@@ -16,7 +16,7 @@ int create_response_headers(Connect *req)
     }
 
     req->resp_headers.s << get_str_http_prot(req->httpProt) << " " << status_resp(req->respStatus) << "\r\n"
-        << "Date: " << req->sTime << "\r\n"
+        << "Date: " << get_time(req->Time) << "\r\n"
         << "Server: " << conf->ServerSoftware << "\r\n";
 
     if (req->reqMethod == M_OPTIONS)
@@ -97,7 +97,7 @@ int send_message(Connect *r, const char *msg)
                 "<h3>" << title << "</h3>\r\n";
         if (msg)
             r->html.s << "<p>" << msg <<  "</p>\r\n";
-        r->html.s << "<hr>\r\n" << r->sTime << "\r\n"
+        r->html.s << "<hr>\r\n" << get_time() << "\r\n"
                 "</body>\r\n"
                 "</html>";
 

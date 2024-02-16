@@ -147,7 +147,7 @@ int create_index_html(Connect *r, char **list, int numFiles, string& path)
     //------------------------------------------------------------------
     r->html.s << "  </table>\r\n"
               "  <hr>\r\n"
-              "  " << r->sTime << "\r\n"
+              "  " << get_time() << "\r\n"
               "  <a href=\"#top\" style=\"display:block;\r\n"
               "         position:fixed;\r\n"
               "         bottom:30px;\r\n"

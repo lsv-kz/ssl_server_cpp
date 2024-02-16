@@ -337,7 +337,7 @@ public:
     SOURCE_ENTITY source_entity;
     MODE_SEND mode_send;
 
-    std::string sTime;
+    time_t Time;
     int respStatus;
     int numPart;
     long long respContentLength;
@@ -399,8 +399,9 @@ int send_message(Connect *req, const char *msg);
 int create_response_headers(Connect *req);
 //----------------------------------------------------------------------
 std::string get_time();
-void get_time(std::string& s);
+std::string get_time(time_t t);
 std::string log_time();
+std::string log_time(time_t t);
 
 const char *strstr_case(const char * s1, const char *s2);
 int strlcmp_case(const char *s1, const char *s2, int len);
