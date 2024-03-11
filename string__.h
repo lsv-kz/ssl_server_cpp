@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <string>
+#include <cstring>
 //======================================================================
 class BaseHex {};
 class BaseDec {};
@@ -51,6 +52,11 @@ class String
     void append(std::string& arg)
     {
         buf += arg;
+    }
+    //------------------------------------------------------------------
+    void append(String& arg)
+    {
+        buf += arg.buf;
     }
     //------------------------------------------------------------------
     template <typename T>
@@ -137,6 +143,7 @@ public:
     String& operator >> (double&) = delete;
     String& operator >> (char*) = delete;
     String(const std::string& s) { buf = s; }
+    String(const char *s) { append(s); }
     //------------------------------------------------------------------
     String& operator << (BaseHex b)
     {
@@ -151,6 +158,16 @@ public:
     }
     //------------------------------------------------------------------
     String & operator = (const char *s)
+    {
+        if (s)
+        {
+            buf.clear();
+            buf += s;
+        }
+        return *this;
+    }
+    //------------------------------------------------------------------
+    String & operator = (char *s)
     {
         if (s)
         {
@@ -177,6 +194,16 @@ public:
     friend bool operator == (const String & s1, const char *s2)
     {
         if (s1.buf == s2)
+            return true;
+        else
+            return false;
+    }
+    //------------------------------------------------------------------
+    friend bool operator != (String& s1, const char *s2)
+    {
+        int len = strlen(s2);
+        if (s1.size() != len) return true;
+        if (strncmp(s1.c_str(), s2, len))
             return true;
         else
             return false;
@@ -317,11 +344,6 @@ public:
     const char *c_str() const
     {
         return buf.c_str();
-    }
-
-    const std::string& str() const
-    {
-        return buf;
     }
 
     void resize(unsigned int n) { buf.resize(n); }

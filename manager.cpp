@@ -6,61 +6,6 @@ static mutex mtx_conn;
 static condition_variable cond_close_conn;
 static int num_conn = 0;
 //======================================================================
-RequestManager::RequestManager(unsigned int n)
-{
-    list_start = list_end = NULL;
-    all_req = stop_manager = 0;
-    NumProc = n;
-}
-//----------------------------------------------------------------------
-RequestManager::~RequestManager() {}
-//----------------------------------------------------------------------
-void RequestManager::push_resp_list(Connect *req)
-{
-mtx_list.lock();
-    req->next = NULL;
-    req->prev = list_end;
-    if (list_start)
-    {
-        list_end->next = req;
-        list_end = req;
-    }
-    else
-        list_start = list_end = req;
-
-    ++all_req;
-mtx_list.unlock();
-    cond_list.notify_one();
-}
-//----------------------------------------------------------------------
-Connect *RequestManager::pop_resp_list()
-{
-unique_lock<mutex> lk(mtx_list);
-    while ((list_start == NULL) && !stop_manager)
-    {
-        cond_list.wait(lk);
-    }
-    if (stop_manager)
-        return NULL;
-
-    Connect *req = list_start;
-    if (list_start->next)
-    {
-        list_start->next->prev = NULL;
-        list_start = list_start->next;
-    }
-    else
-        list_start = list_end = NULL;
-
-    return req;
-}
-//----------------------------------------------------------------------
-void RequestManager::close_manager()
-{
-    stop_manager = 1;
-    cond_list.notify_all();
-}
-//======================================================================
 void start_conn()
 {
 mtx_conn.lock();
@@ -205,26 +150,15 @@ void end_response(Connect *req)
     }
 }
 //======================================================================
-static RequestManager *ReqMan;
 static unsigned long allConn = 0;
-//======================================================================
-void push_resp_list(Connect *r)
-{
-    ReqMan->push_resp_list(r);
-}
-//----------------------------------------------------------------------
-Connect *pop_resp_list()
-{
-    return ReqMan->pop_resp_list();
-}
+static int nProc;
 //======================================================================
 static void signal_handler_child(int sig)
 {
-    int nProc = ReqMan->get_num_proc();
     if (sig == SIGINT)
     {
-        print_err("[%d]<%s:%d> ### SIGINT ### all_conn=%lu, open_conn=%d, all_req=%d\n", nProc,
-                    __func__, __LINE__, allConn, num_conn, ReqMan->get_all_request());
+        print_err("[%d]<%s:%d> ### SIGINT ### all_conn=%lu, open_conn=%d\n", nProc,
+                    __func__, __LINE__, allConn, num_conn);
     }
     else if (sig == SIGTERM)
     {
@@ -247,16 +181,14 @@ static void signal_handler_child(int sig)
 Connect *create_req();
 int write_(int fd, void *data, int size);
 int read_(int fd, void *data, int size);
+void close_threads_manager();
+void threads_manager(int numProc);
+unsigned long get_all_request();
+int get_max_thr();
 //======================================================================
 void manager(int sockServer, unsigned int numProc, int fd_in, int fd_out, char sig)
 {
-    ReqMan = new(nothrow) RequestManager(numProc);
-    if (!ReqMan)
-    {
-        print_err("[%d]<%s:%d> *********** Exit child %u ***********\n", numProc, __func__, __LINE__, numProc);
-        close_logs();
-        exit(1);
-    }
+    nProc = numProc;
     //------------------------------------------------------------------
     if (signal(SIGINT, signal_handler_child) == SIG_ERR)
     {
@@ -305,25 +237,18 @@ void manager(int sockServer, unsigned int numProc, int fd_in, int fd_out, char s
         exit(errno);
     }
     //------------------------------------------------------------------
-    unsigned int n = 0;
-    while (n < conf->NumThreads)
+    thread thr;
+    try
     {
-        thread thr;
-        try
-        {
-            thr = thread(response1, numProc);
-        }
-        catch (...)
-        {
-            print_err("[%d]<%s:%d> Error create thread: errno=%d\n", numProc, __func__, __LINE__, errno);
-            exit(errno);
-        }
-
-        thr.detach();
-        ++n;
+        thr = thread(threads_manager, numProc);
+    }
+    catch (...)
+    {
+        print_err("<%s:%d> Error create thread: errno=%d\n", __func__, __LINE__, errno);
+        exit(errno);
     }
     //------------------------------------------------------------------
-    printf("[%u] +++++ num threads=%u, pid=%u, uid=%u, gid=%u +++++\n", numProc, n, getpid(), getuid(), getgid());
+    printf("[%u] +++++ pid=%u, uid=%u, gid=%u +++++\n", numProc, getpid(), getuid(), getgid());
     //------------------------------------------------------------------
     static struct pollfd fdrd[2];
     fdrd[0].fd = fd_in;
@@ -519,16 +444,15 @@ void manager(int sockServer, unsigned int numProc, int fd_in, int fd_out, char s
     close(sockServer);
 
     print_err("[%d]<%s:%d> all_req=%u; open_conn=%d, status=%u\n", numProc,
-                    __func__, __LINE__, ReqMan->get_all_request(), num_conn, (unsigned int)status);
-
-    ReqMan->close_manager();
+                    __func__, __LINE__, get_all_request(), num_conn, (unsigned int)status);
     close_event_handler();
     EventHandler.join();
 
+    close_threads_manager();
+    thr.join();
+
     usleep(100000);
     close(fd_out);
-
-    delete ReqMan;
 }
 //======================================================================
 Connect *create_req(void)

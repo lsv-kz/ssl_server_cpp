@@ -55,6 +55,8 @@ const int  MAX_PATH = 2048;
 const int  MAX_NAME = 256;
 const int  SIZE_BUF_REQUEST = 8192;
 const int  MAX_HEADERS = 25;
+const int  LIMIT_PROC = 16;
+const int  LIMIT_PARSE_REQ_THREADS = 128;
 const int  ERR_TRY_AGAIN = -1000;
 
 const char boundary[] = "---------a9b5r7a4c0a2d5a1b8r3a";
@@ -92,8 +94,6 @@ enum FCGI_STATUS {FCGI_READ_DATA = 1,  FCGI_READ_HEADER, FCGI_READ_PADDING };
 enum CGI_OPERATION { CGI_CREATE_PROC = 1, CGI_STDIN, CGI_READ_HTTP_HEADERS, CGI_SEND_HTTP_HEADERS, CGI_SEND_ENTITY };
 
 enum SCGI_OPERATION { SCGI_CONNECT = 1, SCGI_PARAMS, SCGI_STDIN, SCGI_READ_HTTP_HEADERS, SCGI_SEND_HTTP_HEADERS, SCGI_SEND_ENTITY };
-
-const int PROC_LIMIT = 8;
 
 union OPERATION { CGI_OPERATION cgi; FCGI_OPERATION fcgi; SCGI_OPERATION scgi;};
 struct Cgi
@@ -159,12 +159,15 @@ struct Config
 
     int MaxWorkConnections;
 
-    unsigned int NumProc;
-    unsigned int MaxNumProc;
-    unsigned int NumThreads;
-    unsigned int MaxCgiProc;
+    int NumProc;
+    int MaxNumProc;
 
-    unsigned int MaxRanges;
+    int MaxParseReqThreads;
+    int MinParseReqThreads;
+
+    int MaxCgiProc;
+
+    int MaxRanges;
     long int ClientMaxBodySize;
 
     int MaxRequestsPerClient;
@@ -350,40 +353,10 @@ public:
     void init();
 };
 //----------------------------------------------------------------------
-class RequestManager
-{
-private:
-    Connect *list_start;
-    Connect *list_end;
-
-    std::mutex mtx_list;
-    std::condition_variable cond_list;
-
-    unsigned int NumProc, all_req, stop_manager;
-
-    RequestManager() {}
-public:
-    RequestManager(const RequestManager&) = delete;
-    RequestManager(unsigned int);
-    ~RequestManager();
-    //-------------------------------
-    unsigned int get_num_proc()
-    {
-        return NumProc;
-    }
-    void push_resp_list(Connect *req);
-    Connect *pop_resp_list();
-    void close_manager();
-    unsigned int get_all_request()
-    {
-        return all_req;
-    }
-};
-//----------------------------------------------------------------------
 extern char **environ;
 //----------------------------------------------------------------------
-void response1(int n_proc);
-int response2(Connect *req);
+void parse_request_thread(int n_proc);
+int prepare_response(Connect *req);
 int options(Connect *req);
 int index_dir(Connect *req, std::string& path);
 //----------------------------------------------------------------------
@@ -425,7 +398,7 @@ const char *content_type(const char *s);
 
 const char *base_name(const char *path);
 int parse_startline_request(Connect *req, char *s);
-int parse_headers(Connect *req, char *s, int n);
+int parse_headers(Connect *req);
 int find_empty_line(Connect *req);
 //----------------------------------------------------------------------
 void create_logfiles(const std::string &);
@@ -435,7 +408,6 @@ void print_err(Connect *req, const char *format, ...);
 void print_log(Connect *req);
 //----------------------------------------------------------------------
 void push_resp_list(Connect *r);
-Connect *pop_resp_list();
 void end_response(Connect *req);
 void close_connect(Connect *req);
 //----------------------------------------------------------------------

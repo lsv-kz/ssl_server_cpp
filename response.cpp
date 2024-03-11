@@ -2,28 +2,170 @@
 
 using namespace std;
 //======================================================================
-void response1(int num_proc)
-{
-    const char *p;
-    Connect *req;
+static Connect *list_start = NULL;
+static Connect *list_end = NULL;
 
+static std::mutex mtx_list, mtx_thr;
+static std::condition_variable cond_list, cond_thr;
+static int num_thr = 0, thr_exit = 0, max_thr = 0, work_thr = 0, size_list = 0;
+static unsigned long all_req = 0;
+//======================================================================
+void push_resp_list(Connect *req)
+{
+lock_guard<mutex> lk(mtx_list);
+    req->next = NULL;
+    req->prev = list_end;
+    if (list_start)
+    {
+        list_end->next = req;
+        list_end = req;
+    }
+    else
+        list_start = list_end = req;
+    ++all_req;
+    ++size_list;
+    cond_list.notify_one();
+    if ((num_thr - work_thr) == size_list)
+        cond_thr.notify_one();
+}
+//======================================================================
+static Connect *pop_resp_list()
+{
+unique_lock<mutex> lk(mtx_list);
+    while ((list_start == NULL) && !thr_exit)
+    {
+        cond_list.wait(lk);
+    }
+    if (thr_exit)
+    {
+        print_err("<%s:%d> *** Exit parse_request_thread, num=%d ***\n", __func__, __LINE__, num_thr);
+        --num_thr;
+        return NULL;
+    }
+
+    Connect *req = list_start;
+    if (list_start->next)
+    {
+        list_start->next->prev = NULL;
+        list_start = list_start->next;
+    }
+    else
+        list_start = list_end = NULL;
+    ++work_thr;
+    --size_list;
+    return req;
+}
+//======================================================================
+void close_threads_manager()
+{
+lock_guard<mutex> lk(mtx_list);
+    thr_exit = 1;
+    cond_list.notify_all();
+    cond_thr.notify_one();
+}
+//======================================================================
+unsigned long get_all_request()
+{
+    return all_req;
+}
+//======================================================================
+int get_max_thr()
+{
+    return max_thr;
+}
+//======================================================================
+int is_maxthr()
+{
+unique_lock<mutex> lk(mtx_thr);
+    while (((num_thr >= conf->MaxParseReqThreads) || ((num_thr - work_thr) > size_list)) && 
+        !(num_thr < conf->MinParseReqThreads) && !thr_exit)
+    {
+        cond_thr.wait(lk);
+    }
+    
+    if (thr_exit)
+        return thr_exit;
+    num_thr++;
+    if (num_thr > max_thr)
+        max_thr = num_thr;
+
+    return thr_exit;
+}
+//======================================================================
+int exit_thread(Connect *req)
+{
+    int ret = 0;
+    if (req)
+        end_response(req);
+mtx_thr.lock();
+    --work_thr;
+    if ((num_thr > conf->MinParseReqThreads) && ((num_thr - work_thr) >= 1))
+    {
+        num_thr--;
+        ret = 1;
+    }
+mtx_thr.unlock();
+    return ret;
+}
+//======================================================================
+void threads_manager(int num_proc)
+{
+    print_err("<%s:%d> --- run threads_manager ---max_thr=%d\n", __func__, __LINE__, max_thr);
+    thread t;
+    int i = 0;
+    for (; i < conf->MinParseReqThreads; ++i)
+    {
+        try
+        {
+            t = thread(parse_request_thread, num_proc);
+        }
+        catch(...)
+        {
+            print_err("<%s:%d> Error create thread: %s\n", __func__, __LINE__, strerror(errno));
+            abort();
+        }
+
+        t.detach();
+        ++num_thr;
+    }
+    printf("%d<%s:%d> ParseReqThreads=%d\n", num_proc, __func__, __LINE__, num_thr);
     while (1)
     {
-        req = pop_resp_list();
+        if (is_maxthr())
+            break;
+
+        try
+        {
+            t = thread(parse_request_thread, num_proc);
+        }
+        catch(...)
+        {
+            print_err("<%s:%d> Error create thread: %s; num_thr=%d\n", __func__, __LINE__, strerror(errno), num_thr);
+            abort();
+        }
+
+        t.detach();
+    }
+    print_err("<%s:%d> ***** exit threads_manager *****\n", __func__, __LINE__);
+}
+//======================================================================
+void parse_request_thread(int num_proc)
+{
+    while (1)
+    {
+        Connect *req = pop_resp_list();
         if (!req)
         {
-            //print_err("%d<%s:%d> Error pop_resp_list()=NULL\n", num_proc, __func__, __LINE__);
             return;
         }
         //--------------------------------------------------------------
-        for (int i = 1; i < req->countReqHeaders; ++i)
+        req->err = parse_headers(req);
+        if (req->err < 0)
         {
-            int ret = parse_headers(req, req->reqHdName[i], i);
-            if (ret < 0)
-            {
-                print_err(req, "<%s:%d>  Error parse_headers(): %d\n", __func__, __LINE__, ret);
-                goto end;
-            }
+            print_err(req, "<%s:%d>  Error parse_headers(): %d\n", __func__, __LINE__, req->err);
+            if (exit_thread(req))
+                return;
+            continue;
         }
     #ifdef TCP_CORK_
         if (conf->TcpCork == 'y')
@@ -42,7 +184,9 @@ void response1(int num_proc)
         if ((req->httpProt != HTTP10) && (req->httpProt != HTTP11))
         {
             req->err = -RS505;
-            goto end;
+            if (exit_thread(req))
+                return;
+            continue;
         }
 
         if (req->numReq >= (unsigned int)conf->MaxRequestsPerClient || (req->httpProt == HTTP10))
@@ -50,6 +194,7 @@ void response1(int num_proc)
         else if (req->req_hd.iConnection == -1)
             req->connKeepAlive = 1;
 
+        const char *p;
         if ((p = strchr(req->uri, '?')))
         {
             req->uriLen = p - req->uri;
@@ -62,7 +207,9 @@ void response1(int num_proc)
         {
             print_err(req, "<%s:%d> Error: decode URI\n", __func__, __LINE__);
             req->err = -RS404;
-            goto end;
+            if (exit_thread(req))
+                return;
+            continue;
         }
 
         if (clean_path(req->decodeUri) <= 0)
@@ -70,7 +217,9 @@ void response1(int num_proc)
             print_err(req, "<%s:%d> Error URI=%s\n", __func__, __LINE__, req->decodeUri);
             req->lenDecodeUri = strlen(req->decodeUri);
             req->err = -RS400;
-            goto end;
+            if (exit_thread(req))
+                return;
+            continue;
         }
         req->lenDecodeUri = strlen(req->decodeUri);
 
@@ -78,34 +227,42 @@ void response1(int num_proc)
         {
             print_err(req, "<%s:%d> Error UsePHP=%s\n", __func__, __LINE__, conf->UsePHP.c_str());
             req->err = -RS404;
-            goto end;
+            if (exit_thread(req))
+                return;
+            continue;
         }
 
         if (req->req_hd.iUpgrade >= 0)
         {
             print_err(req, "<%s:%d> req->upgrade: %s\n", __func__, __LINE__, req->reqHdValue[req->req_hd.iUpgrade]);
             req->err = -RS505;
-            goto end;
+            if (exit_thread(req))
+                return;
+            continue;
         }
         //--------------------------------------------------------------
-        if ((req->reqMethod == M_GET) || 
-            (req->reqMethod == M_HEAD) || 
-            (req->reqMethod == M_POST) || 
-            (req->reqMethod == M_OPTIONS))
+        if ((req->reqMethod != M_GET) &&
+            (req->reqMethod != M_HEAD) &&
+            (req->reqMethod != M_POST) &&
+            (req->reqMethod != M_OPTIONS))
         {
-            int ret = response2(req);
-            if (ret == 1)
-            {// "req" may be free !!!
-                continue;
-            }
-
-            req->err = ret;
+            req->err = -RS501;
+            if (exit_thread(req))
+                return;
+            continue;
         }
-        else
-            req->err = -RS405;
 
-    end:
-        end_response(req);
+        int ret = prepare_response(req);
+        if (ret < 0)
+        {
+            req->err = ret;
+            if (exit_thread(req))
+                return;
+            continue;
+        }
+    
+        if (exit_thread(NULL))
+            return;
     }
 }
 //======================================================================
@@ -158,7 +315,7 @@ int fastcgi(Connect* req, const char* uri)
     return 1;
 }
 //======================================================================
-int response2(Connect *req)
+int prepare_response(Connect *req)
 {
     struct stat st;
     char *p = strstr(req->decodeUri, ".php");

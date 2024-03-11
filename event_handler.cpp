@@ -24,7 +24,7 @@ static condition_variable cond_;
 
 static int close_thr = 0;
 static int num_poll, num_work;
-static unsigned int cgi_wait, cgi_work;
+static int cgi_wait, cgi_work;
 static int size_buf;
 static char *snd_buf;
 

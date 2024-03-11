@@ -68,8 +68,11 @@ void create_conf_file(const char *path)
     fprintf(f, "MaxWorkConnections  768\n");
 
     fprintf(f, "NumProc  1\n");
-    fprintf(f, "MaxNumProc  4\n");
-    fprintf(f, "NumThreads  2\n");
+    fprintf(f, "MaxNumProc  4\n\n");
+
+    fprintf(f, "MaxParseReqThreads  8\n");
+    fprintf(f, "MinParseReqThreads  4\n\n");
+
     fprintf(f, "MaxCgiProc  15\n\n");
 
     fprintf(f, "MaxRequestsPerClient  100\n");
@@ -333,8 +336,10 @@ int read_conf_file(FILE *fconf)
                 s2 >> c.NumProc;
             else if ((s1 == "MaxNumProc") && is_number(s2.c_str()))
                 s2 >> c.MaxNumProc;
-            else if ((s1 == "NumThreads") && is_number(s2.c_str()))
-                s2 >> c.NumThreads;
+            else if ((s1 == "MaxParseReqThreads") && is_number(s2.c_str()))
+                s2 >> c.MaxParseReqThreads;
+            else if ((s1 == "MinParseReqThreads") && is_number(s2.c_str()))
+                s2 >> c.MinParseReqThreads;
             else if ((s1 == "MaxCgiProc") && is_number(s2.c_str()))
                 s2 >> c.MaxCgiProc;
             else if ((s1 == "MaxRequestsPerClient") && is_number(s2.c_str()))
@@ -397,7 +402,7 @@ int read_conf_file(FILE *fconf)
                     }
                 }
 
-                if (ss.str() != "}")
+                if (ss != "}")
                 {
                     fprintf(stderr, "<%s:%d> Error not found \"}\", line <%d>\n", __func__, __LINE__, line_);
                     return -1;
@@ -420,7 +425,7 @@ int read_conf_file(FILE *fconf)
                     create_fcgi_list(&c.fcgi_list, s1, s2, FASTCGI);
                 }
 
-                if (ss.str() != "}")
+                if (ss != "}")
                 {
                     fprintf(stderr, "<%s:%d> Error not found \"}\", line <%d>\n", __func__, __LINE__, line_);
                     return -1;
@@ -443,7 +448,7 @@ int read_conf_file(FILE *fconf)
                     create_fcgi_list(&c.fcgi_list, s1, s2, SCGI);
                 }
 
-                if (ss.str() != "}")
+                if (ss != "}")
                 {
                     fprintf(stderr, "<%s:%d> Error not found \"}\", line <%d>\n", __func__, __LINE__, line_);
                     return -1;
@@ -500,9 +505,9 @@ int read_conf_file(FILE *fconf)
         exit(1);
     }
     //------------------------------------------------------------------
-    if ((conf->MaxNumProc < 1) || (conf->MaxNumProc > PROC_LIMIT))
+    if ((conf->MaxNumProc < 1) || (conf->MaxNumProc > LIMIT_PROC))
     {
-        fprintf(stderr, "<%s:%d> Error MaxNumProc=%d; [1 <= MaxNumProc <= %d]\n", __func__, __LINE__, conf->MaxNumProc, PROC_LIMIT);
+        fprintf(stderr, "<%s:%d> Error MaxNumProc=%d; [1 <= MaxNumProc <= %d]\n", __func__, __LINE__, conf->MaxNumProc, LIMIT_PROC);
         return -1;
     }
 
@@ -515,12 +520,18 @@ int read_conf_file(FILE *fconf)
     if (conf->NumProc == 1)
         c.BalancedLoad = 'n';
     //------------------------------------------------------------------
-    if ((conf->NumThreads < 1) || (6 < conf->NumThreads))
+    if ((conf->MaxParseReqThreads < 1) || (conf->MaxParseReqThreads > LIMIT_PARSE_REQ_THREADS))
     {
-        fprintf(stderr, "<%s:%d> Error: NumThreads=%d\n", __func__, __LINE__, conf->NumThreads);
+        fprintf(stderr, "<%s:%d> Error: MaxParseReqThreads=%d > %d\n", __func__, __LINE__, conf->MaxParseReqThreads, LIMIT_PARSE_REQ_THREADS);
         return -1;
     }
-    //------------------- Setting OPEN_MAX -----------------------------
+    
+    if ((conf->MinParseReqThreads < 1) || (conf->MinParseReqThreads > conf->MaxParseReqThreads))
+    {
+        fprintf(stderr, "<%s:%d> Error: MinParseReqThreads=%d\n", __func__, __LINE__, conf->MinParseReqThreads);
+        return -1;
+    }
+    //------------------------------------------------------------------
     if (conf->MaxWorkConnections <= 0)
     {
         fprintf(stderr, "<%s:%d> Error config file: MaxWorkConnections=%d\n", __func__, __LINE__, conf->MaxWorkConnections);

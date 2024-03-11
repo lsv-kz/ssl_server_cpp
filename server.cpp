@@ -18,10 +18,10 @@ static int read_from_pipe(int fd, char *buf, int len, int timeout);
 static string pidFile;
 static string confPath;
 
-static pid_t pidChild[PROC_LIMIT];
+static pid_t pidChild[LIMIT_PROC];
 static int pfd[2], pfd_in;
 static int startServer = 0, restartServer = 1;
-static unsigned int numCreatedProc;
+static int numCreatedProc;
 //======================================================================
 static void signal_handler(int sig)
 {
@@ -37,29 +37,12 @@ static void signal_handler(int sig)
             exit(0);
         }
     }
-    else if (sig == SIGTERM)
-    {
-        print_err("<main> ####### SIGTERM #######\n");
-        for (unsigned int i = 0; i < numCreatedProc; ++i)
-        {
-            if (pidChild[i] > 0)
-                kill(pidChild[i], SIGKILL);
-        }
-
-        pid_t pid;
-        while ((pid = wait(NULL)) != -1)
-        {
-            fprintf(stderr, "<%s> wait() pid: %d\n", __func__, pid);
-        }
-
-        exit(0);
-    }
     else if (sig == SIGSEGV)
     {
         print_err("<main> ####### SIGSEGV #######\n");
         shutdown(sockServer, SHUT_RDWR);
         close(sockServer);
-        for (unsigned int i = 0; i < numCreatedProc; ++i)
+        for (int i = 0; i < numCreatedProc; ++i)
         {
             if (pidChild[i] > 0)
                 kill(pidChild[i], SIGKILL);
@@ -151,7 +134,7 @@ void print_config()
          << "\n   BalancedLoad           : " << conf->BalancedLoad
          << "\n   MaxWorkConnections     : " << conf->MaxWorkConnections
          << "\n\n   NumProc                : " << conf->NumProc
-         << "\n   NumThreads             : " << conf->NumThreads
+         << "\n   MinParseReqThreads     : " << conf->MinParseReqThreads
          << "\n   MaxCgiProc             : " << conf->MaxCgiProc
          << "\n\n   MaxRequestsPerClient   : " << conf->MaxRequestsPerClient
          << "\n   TimeoutKeepAlive       : " << conf->TimeoutKeepAlive
@@ -233,7 +216,7 @@ int main(int argc, char *argv[])
             else if (!strcmp(sig, "close"))
                 sig_send = SIGUSR2;
             else if (!strcmp(sig, "abort"))
-                sig_send = SIGTERM;
+                sig_send = SIGABRT;
             else
             {
                 fprintf(stderr, "<%d> ? option -s: %s\n", __LINE__, sig);
@@ -301,12 +284,6 @@ int main(int argc, char *argv[])
             if (signal(SIGINT, signal_handler) == SIG_ERR)
             {
                 fprintf(stderr, "<%s:%d> Error signal(SIGINT): %s\n", __func__, __LINE__, strerror(errno));
-                break;
-            }
-
-            if (signal(SIGTERM, signal_handler) == SIG_ERR)
-            {
-                fprintf(stderr, "<%s:%d> Error signal(SIGTERM): %s\n", __func__, __LINE__, strerror(errno));
                 break;
             }
 
