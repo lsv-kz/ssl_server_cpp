@@ -56,6 +56,9 @@ void create_conf_file(const char *path)
     fprintf(f, "TcpCork  n # y/n \n");
     fprintf(f, "TcpNoDelay  y \n\n");
 
+    fprintf(f, "LingerOn          y # y/n \n");
+    fprintf(f, "LingerTime        10\n\n");
+
     fprintf(f, "DocumentRoot  www/html\n");
     fprintf(f, "ScriptPath  www/cgi-bin\n");
     fprintf(f, "LogPath  www/logs\n");
@@ -312,6 +315,10 @@ int read_conf_file(FILE *fconf)
                 c.TcpCork = (char)tolower(s2[0]);
             else if ((s1 == "TcpNoDelay") && is_bool(s2.c_str()))
                 c.TcpNoDelay = (char)tolower(s2[0]);
+            else if ((s1 == "LingerOn") && is_bool(s2.c_str()))
+                c.LingerOn = (char)tolower(s2[0]);
+            else if ((s1 == "LingerTime") && is_number(s2.c_str()))
+                c.LingerTime = atoi(s2.c_str());
             else if ((s1 == "ListenBacklog") && is_number(s2.c_str()))
                 s2 >> c.ListenBacklog;
             else if ((s1 == "SendFile") && is_bool(s2.c_str()))

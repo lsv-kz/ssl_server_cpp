@@ -4,8 +4,8 @@ using namespace std;
 //======================================================================
 void init_openssl()
 {
-    //SSL_library_init();
-    //OpenSSL_add_ssl_algorithms();
+    SSL_library_init();
+    OpenSSL_add_ssl_algorithms();
     ////OpenSSL_add_all_algorithms();
     //SSL_load_error_strings();
     //ERR_load_crypto_strings();
@@ -20,6 +20,7 @@ SSL_CTX *create_context()
 {
     const SSL_METHOD *method;
     method = TLS_server_method();
+    //method = TLSv1_2_server_method();
     return SSL_CTX_new(method);
 }
 //======================================================================
@@ -123,7 +124,14 @@ int ssl_read(Connect *req, char *buf, int len)// return: ERR_TRY_AGAIN | -1 | 0 
         }
     }
     else
+    {
+        int pend = SSL_pending(req->tls.ssl);
+        if (pend)
+            req->io_status = WORK;
+        else
+            req->io_status = POLL;
         return ret;
+    }
 }
 //======================================================================
 int ssl_write(Connect *req, const char *buf, int len)// return: ERR_TRY_AGAIN | -1 | [num read bytes]

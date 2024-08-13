@@ -152,6 +152,9 @@ struct Config
     char TcpCork;
     char TcpNoDelay;
 
+    char LingerOn;
+    int LingerTime;
+
     char SendFile;
     int SndBufSize;
 

@@ -57,6 +57,17 @@ int create_server_socket(const Config *conf)
         }
     }
 
+    struct linger l;
+    if (conf->LingerOn == 'y')
+        l.l_onoff = 1;
+    else
+        l.l_onoff = 0;
+    l.l_linger = conf->LingerTime;
+    if (setsockopt(sockfd, SOL_SOCKET, SO_LINGER, &l, sizeof(l)))
+    {
+        print_err("<%s:%d> Error setsockopt(SO_LINGER): %s\n", __func__, __LINE__, strerror(errno));
+    }
+
     if (listen(sockfd, conf->ListenBacklog) == -1)
     {
         fprintf(stderr, "Error listen(): %s\n", strerror(errno));

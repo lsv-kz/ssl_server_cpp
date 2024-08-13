@@ -128,6 +128,8 @@ void print_config()
          << "\n\n   ListenBacklog          : " << conf->ListenBacklog
          << "\n   TcpCork                : " << conf->TcpCork
          << "\n   TcpNoDelay             : " << conf->TcpNoDelay
+         << "\n\n   LingerOn               : " << conf->LingerOn
+         << "\n   LingerTime             : " << conf->LingerTime
          << "\n\n   SendFile               : " << conf->SendFile
          << "\n   SndBufSize             : " << conf->SndBufSize
          << "\n\n   NumCpuCores            : " << thread::hardware_concurrency()
@@ -334,8 +336,12 @@ int main_proc()
     }
     cerr << "   pid="  << pid << "; uid=" << getuid() << "; gid=" << getgid() << "\n";
     cout << "   pid="  << pid << "; uid=" << getuid() << "; gid=" << getgid() << "\n";
-    cerr << "   NumCpuCores: " << thread::hardware_concurrency() << "\n   BalancedLoad: " << conf->BalancedLoad
-         << "\n   MaxWorkConnections: " << conf->MaxWorkConnections << "\n   SndBufSize: " << conf->SndBufSize << "\n";
+    cerr << "   NumCpuCores: " << thread::hardware_concurrency()
+         << "\n   NumProcesses: " << conf->NumProc
+         << "\n   MaxWorkConnections: " << conf->MaxWorkConnections
+         << "\n   SndBufSize: " << conf->SndBufSize
+         << "\n   LingerOn: " << conf->LingerOn
+         << "\n   LingerTime: " << conf->LingerTime << "\n";
     //------------------------------------------------------------------
     for ( ; environ[0]; )
     {

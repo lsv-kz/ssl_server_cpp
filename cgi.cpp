@@ -32,19 +32,21 @@ const char *get_script_name(const char *name)
     return "";
 }
 //======================================================================
-void wait_pid(Connect *req)
+void wait_pid(Connect *r)
 {
-    int n = waitpid(req->cgi.pid, NULL, WNOHANG); // no blocking
+    if (r->cgi.pid <= 0)
+        return;
+    int n = waitpid(r->cgi.pid, NULL, WNOHANG); // no blocking
     if (n == -1)
     {
-        //print_err(req, "<%s:%d> Error waitpid(%d): %s\n", __func__, __LINE__, req->cgi.pid, strerror(errno));
+        //print_err(r, "<%s:%d> Error waitpid(%d): %s\n", __func__, __LINE__, r->cgi.pid, strerror(errno));
     }
     else if (n == 0)
     {
-        if (kill(req->cgi.pid, SIGKILL) == 0)
-            waitpid(req->cgi.pid, NULL, 0);
+        if (kill(r->cgi.pid, SIGKILL) == 0)
+            waitpid(r->cgi.pid, NULL, 0);
         else
-            print_err(req, "<%s:%d> Error kill(%d): %s\n", __func__, __LINE__, req->cgi.pid, strerror(errno));
+            print_err(r, "<%s:%d> Error kill(%d): %s\n", __func__, __LINE__, r->cgi.pid, strerror(errno));
     }
 }
 //======================================================================
