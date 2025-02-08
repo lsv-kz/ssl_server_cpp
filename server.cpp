@@ -330,7 +330,7 @@ int main_proc()
          << "\n   hardware_concurrency = " << thread::hardware_concurrency() << "\n";
     if (conf->Protocol == HTTPS)
     {
-        SSL  *ssl = SSL_new(conf->ctx);
+        SSL *ssl = SSL_new(conf->ctx);
         cout << "   SSL version: " << SSL_get_version(ssl) << "\n";
         SSL_free(ssl);
     }

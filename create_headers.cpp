@@ -9,12 +9,6 @@ int create_response_headers(Connect *req)
     req->Time = time(NULL);
     req->resp_headers.s = "";
     req->resp_headers.s.reserve(512);
-    if (req->resp_headers.s.error())
-    {
-        print_err(req, "<%s:%d> Error create String object\n", __func__, __LINE__);
-        return -1;
-    }
-
     req->resp_headers.s << get_str_http_prot(req->httpProt) << " " << status_resp(req->respStatus) << "\r\n"
         << "Date: " << get_time(req->Time) << "\r\n"
         << "Server: " << conf->ServerSoftware << "\r\n";
@@ -65,15 +59,6 @@ int create_response_headers(Connect *req)
     }
 
     req->resp_headers.s << "\r\n";
-
-    if (req->resp_headers.s.error())
-    {
-        print_err(req, "<%s:%d> Error create response headers\n", __func__, __LINE__);
-        req->req_hd.iReferer = MAX_HEADERS - 1;
-        req->reqHdValue[req->req_hd.iReferer] = "Error create response headers";
-        return -1;
-    }
-
     return 0;
 }
 //======================================================================

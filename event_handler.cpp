@@ -169,9 +169,7 @@ void del_from_list(Connect *r)
         }
 
         r->scriptName = "";
-    mtx_.lock();
         --cgi_work;
-    mtx_.unlock();
     }
     else
     {
@@ -218,49 +216,25 @@ mtx_.unlock();
 static void cgi_add_work_list()
 {
 mtx_cgi.lock();
-    if ((cgi_work < conf->MaxCgiProc) && cgi_wait_list_end)
+    int n_max = conf->MaxCgiProc - cgi_work;
+    Connect *r = cgi_wait_list_end;
+
+    for ( ; (n_max > 0) && r; r = cgi_wait_list_end, --n_max)
     {
-        int n_max = conf->MaxCgiProc - cgi_work;
-        Connect *r = cgi_wait_list_end;
+        cgi_wait_list_end = r->prev;
+        if (cgi_wait_list_end == NULL)
+            cgi_wait_list_start = NULL;
+        --cgi_wait;
+        //--------------------------
+        if (work_list_end)
+            work_list_end->next = r;
+        else
+            work_list_start = r;
 
-        for ( ; (n_max > 0) && r; r = cgi_wait_list_end, --n_max)
-        {
-            cgi_wait_list_end = r->prev;
-            if (cgi_wait_list_end == NULL)
-                cgi_wait_list_start = NULL;
-            --cgi_wait;
-            //--------------------------
-            if ((r->cgi_type == CGI) || (r->cgi_type == PHPCGI))
-            {
-                r->cgi.to_script = -1;
-                r->cgi.from_script = -1;
-                r->cgi.op.cgi = CGI_CREATE_PROC;
-            }
-            else if ((r->cgi_type == PHPFPM) || (r->cgi_type == FASTCGI))
-            {
-                r->cgi.op.fcgi = FASTCGI_CONNECT;
-            }
-            else if (r->cgi_type == SCGI)
-            {
-                r->cgi.op.scgi = SCGI_CONNECT;
-            }
-            else
-            {
-                print_err(r, "<%s:%d> operation=%d, cgi_type=%s\n", __func__, __LINE__, r->operation, get_cgi_type(r->cgi_type));
-                end_response(r);
-                continue;
-            }
-            //--------------------------
-            if (work_list_end)
-                work_list_end->next = r;
-            else
-                work_list_start = r;
-
-            r->prev = work_list_end;
-            r->next = NULL;
-            work_list_end = r;
-            ++cgi_work;
-        }
+        r->prev = work_list_end;
+        r->next = NULL;
+        work_list_end = r;
+        ++cgi_work;
     }
 mtx_cgi.unlock();
 }
@@ -558,6 +532,27 @@ void event_handler(int num_chld)
 //======================================================================
 void push_cgi(Connect *r)
 {
+    if ((r->cgi_type == CGI) || (r->cgi_type == PHPCGI))
+    {
+        r->cgi.to_script = -1;
+        r->cgi.from_script = -1;
+        r->cgi.op.cgi = CGI_CREATE_PROC;
+    }
+    else if ((r->cgi_type == PHPFPM) || (r->cgi_type == FASTCGI))
+    {
+        r->cgi.op.fcgi = FASTCGI_CONNECT;
+    }
+    else if (r->cgi_type == SCGI)
+    {
+        r->cgi.op.scgi = SCGI_CONNECT;
+    }
+    else
+    {
+        print_err(r, "<%s:%d> operation=%d, cgi_type=%s\n", __func__, __LINE__, r->operation, get_cgi_type(r->cgi_type));
+        end_response(r);
+        return;
+    }
+
     r->operation = DYN_PAGE;
     r->io_status = WORK;
     r->respStatus = RS200;

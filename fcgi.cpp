@@ -969,6 +969,13 @@ void fcgi_worker(Connect* r)
                         }
                         else
                         {
+                            if (r->respStatus == RS204)
+                            {
+                                del_from_list(r);
+                                end_response(r);
+                                return;
+                            }
+
                             r->cgi.op.fcgi = FASTCGI_SEND_ENTITY;
                             r->sock_timer = 0;
                             if (r->lenTail > 0)

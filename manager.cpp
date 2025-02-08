@@ -22,14 +22,13 @@ unique_lock<mutex> lk(mtx_conn);
     }
 }
 //======================================================================
-int is_maxconn()
+bool is_maxconn()
 {
-mtx_conn.lock();
-    int n = 0;
+unique_lock<mutex> lk(mtx_conn);
     if (num_conn >= conf->MaxWorkConnections)
-        n = 1;
-mtx_conn.unlock();
-    return n;
+        return true;
+    else
+        return false;
 }
 //======================================================================
 void close_connect(Connect *req)
@@ -186,7 +185,7 @@ void threads_manager(int numProc);
 unsigned long get_all_request();
 int get_max_thr();
 //======================================================================
-void manager(int sockServer, unsigned int numProc, int fd_in, int fd_out, char sig)
+void manager(int sockServer, unsigned int numProc, int fd_in, int fd_out, char st)
 {
     nProc = numProc;
     //------------------------------------------------------------------
@@ -257,7 +256,7 @@ void manager(int sockServer, unsigned int numProc, int fd_in, int fd_out, char s
     fdrd[1].fd = sockServer;
     fdrd[1].events = POLLIN;
 
-    unsigned char status = sig;
+    unsigned char status = st;
     int num_fd = 1, run = 1;
     if (write_(fd_out, &status, sizeof(status)) < 0)
         run = 0;
@@ -267,7 +266,7 @@ void manager(int sockServer, unsigned int numProc, int fd_in, int fd_out, char s
         struct sockaddr_storage clientAddr;
         socklen_t addrSize = sizeof(struct sockaddr_storage);
 
-        if ((0x7f & status) == CONNECT_ALLOW)
+        if (status & CONNECT_ALLOW)
         {
             if (is_maxconn())
             {//------ the number of connections is the maximum ---------

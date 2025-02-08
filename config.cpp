@@ -524,7 +524,7 @@ int read_conf_file(FILE *fconf)
         return -1;
     }
 
-    if (conf->NumProc == 1)
+    if (conf->MaxNumProc == 1)
         c.BalancedLoad = 'n';
     //------------------------------------------------------------------
     if ((conf->MaxParseReqThreads < 1) || (conf->MaxParseReqThreads > LIMIT_PARSE_REQ_THREADS))

@@ -405,20 +405,8 @@ int prepare_response(Connect *req)
 
             req->hdrs.reserve(127);
             req->hdrs << "Location: " << req->uri << "\r\n";
-            if (req->hdrs.error())
-            {
-                print_err(req, "<%s:%d> Error\n", __func__, __LINE__);
-                return -RS500;
-            }
-
             String s(256);
             s << "The document has moved <a href=\"" << req->uri << "\">here</a>.";
-            if (s.error())
-            {
-                print_err(req, "<%s:%d> Error create_header()\n", __func__, __LINE__);
-                return -RS500;
-            }
-
             return send_message(req, s.c_str());
         }
         //--------------------------------------------------------------
@@ -577,12 +565,6 @@ int send_multypart(Connect *req)
     req->hdrs.reserve(256);
     req->hdrs << "Content-Type: multipart/byteranges; boundary=" << boundary << "\r\n";
     req->hdrs << "Content-Length: " << send_all_bytes << "\r\n";
-    if (req->hdrs.error())
-    {
-        print_err(req, "<%s:%d> Error create response headers\n", __func__, __LINE__);
-        return -1;
-    }
-
     req->rg.set_index();
 
     if (create_response_headers(req))

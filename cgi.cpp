@@ -783,6 +783,15 @@ void cgi_worker(Connect* r)
                     }
                     else
                     {
+                        if (r->respStatus == RS204)
+                        {
+                            close(r->cgi.from_script);
+                            r->cgi.from_script = -1;
+                            del_from_list(r);
+                            end_response(r);
+                            return;
+                        }
+
                         r->cgi.op.cgi = CGI_SEND_ENTITY;
                         r->sock_timer = 0;
                         if (r->lenTail > 0)
